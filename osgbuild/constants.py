@@ -19,8 +19,8 @@ KOJI_CONF = "osg-koji-site.conf"
 OLD_KOJI_CONF = "osg-koji.conf"
 DATA_DIR = "/usr/share/osg-build"
 
-KOJI_HUB = "http://koji.opensciencegrid.org"
-KOJI_WEB = "https://koji.opensciencegrid.org"
+KOJI_HUB = "http://koji-hub-testing.chtc.wisc.edu"
+KOJI_WEB = "https://koji-hub-testing.chtc.wisc.edu"
 
 DATA_FILE_SEARCH_PATH = [os.path.abspath(os.path.dirname(__file__) + "/../data")]
 if "OSG_LOCATION" in os.environ:
