@@ -4,6 +4,8 @@ the osg/ dir in the package.
 """
 
 # pylint: disable=W0614
+from __future__ import absolute_import
+from __future__ import print_function
 import fnmatch
 import logging
 import glob
@@ -13,9 +15,9 @@ import tempfile
 import shutil
 import urllib2
 
-from osgbuild.constants import *
-from osgbuild.error import Error, GlobNotFoundError
-from osgbuild import utils
+from .constants import *
+from .error import Error, GlobNotFoundError
+from . import utils
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +45,7 @@ def process_meta_url(line, destdir):
             name = basename[:-4]
         else:
             raise Error("No package name specified: %s" % line)
-    print "Checking out git repo for %s." % name
+    print("Checking out git repo for %s." % name)
     tag = contents.get("tag")
     if not tag:
         raise Error("No package tag specified: %s" % line)
