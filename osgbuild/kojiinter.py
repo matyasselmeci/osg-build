@@ -12,8 +12,10 @@ import logging
 import re
 import os
 import time
-import urllib2
-from urllib2 import HTTPError
+try:
+    from six.moves import urllib
+except ImportError:
+    from .six.moves import urllib
 
 from .constants import *
 from . import clientcert
@@ -96,8 +98,8 @@ def download_koji_file(task_id, filename, destdir):
     url = KOJI_HUB + "/koji/getfile?taskID=%d&name=%s" % (task_id, filename)
     log.debug('Retrieving ' + url)
     try:
-        handle = urllib2.urlopen(url)
-    except HTTPError as err:
+        handle = urllib.request.urlopen(url)
+    except urllib.error.HTTPError as err:
         log.error('Error retrieving ' + url)
         log.error(str(err))
         raise
