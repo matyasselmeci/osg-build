@@ -126,7 +126,7 @@ class TestLint(XTestCase):
     """Tests for 'lint' task"""
 
     def setUp(self):
-        self.pkg_dir = common_setUp(opj(TRUNK, "condor"), "{2018-06-27}")
+        self.pkg_dir = common_setUp(opj(TRUNK, "condor"), "{2020-10-27}")
 
     def test_lint(self):
         out = backtick_osg_build(["lint", self.pkg_dir])
@@ -148,8 +148,8 @@ class TestRpmbuild(XTestCase):
     """Tests for 'rpmbuild' task"""
 
     def setUp(self):
-        self.pkg_dir = common_setUp(opj(TRUNK, "osg-build"),
-                                    "{2018-06-01}")
+        self.pkg_dir = common_setUp(opj(DEVOPS, "osg-build"),
+                                    "{2020-10-27}")
 
     def test_rpmbuild(self):
         out = backtick_osg_build(["rpmbuild", self.pkg_dir])
@@ -190,26 +190,26 @@ class TestPrebuild(XTestCase):
             "srpm not successfully built")
 
     def test_prebuild_osgonly(self):
-        pkg_osgonly_dir = common_setUp(opj(TRUNK, "osg-build"),
-                                       "{2018-06-01}")
+        pkg_osgonly_dir = common_setUp(opj(DEVOPS, "osg-build"),
+                                       "{2020-10-27}")
         checked_osg_build(["prebuild", pkg_osgonly_dir])
         final_contents = get_listing(opj(pkg_osgonly_dir, C.WD_PREBUILD))
 
         self.assertTrue(
             regex_in_list(
-                r"osg-build-1[.]12[.]2-1[.]osg[.]el\d[.]src[.]rpm",
+                r"osg-build-1[.]16[.]2-1[.]osg[.]el\d[.]src[.]rpm",
                 final_contents),
             "srpm not successfully built")
 
     def test_prebuild_passthrough(self):
         pkg_passthrough_dir = common_setUp(opj(TRUNK, "osg-build"),
-                                           "{2018-06-01}")
+                                           "{2020-10-27}")
         checked_osg_build(["prebuild", pkg_passthrough_dir])
         final_contents = get_listing(opj(pkg_passthrough_dir, C.WD_PREBUILD))
 
         self.assertTrue(
             regex_in_list(
-                r"osg-build-1[.]12[.]2-1[.]osg[.]el\d[.]src[.]rpm",
+                r"osg-build-1[.]16[.]2-1[.]osg[.]el\d[.]src[.]rpm",
                 final_contents),
             "srpm not successfully built")
 
@@ -279,14 +279,14 @@ class TestFetch(XTestCase):
             "Spec file not overridden")
 
     def test_git_fetch(self):
-        common_setUp(opj(DEVOPS, "osg-build"), "{2019-10-01}")
+        common_setUp(opj(DEVOPS, "osg-build"), "{2020-10-27}")
         contents = self.fetch_sources("osg-build")
 
         self.assertTrue(
             "osg-build.spec" in contents,
             "spec file not found")
         self.assertTrue(
-            "osg-build-1.14.2.tar.gz" in contents,
+            "osg-build-1.16.2.tar.gz" in contents,
             "source tarball not found")
 
     def test_git_fetch_with_release(self):
