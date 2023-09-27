@@ -32,6 +32,19 @@ except (ImportError, AttributeError):
     HAVE_KOJILIB = False
 
 
+class CallAPIError(KojiError):
+    """A wrapper around an error from a koji api call.
+    Used to try and make KojiShellInter.call_api() and KojiLibInter.call_api()
+    look similar.
+    """
+
+    def __init__(self, error):
+        if isinstance(error, str):
+            self.error = error
+        else:
+            self.error = repr(error)
+
+
 @functools.lru_cache()
 def get_koji_config_file():
     # type: () -> str
@@ -196,6 +209,12 @@ class KojiInter(object):
     def mock_config(self, arch, tag, dist, outpath, name):
         """Request a mock config from koji-hub"""
         return KojiInter.backend.mock_config(arch, tag, dist, outpath, name)
+
+    def call_api(self, name, *args, **kwargs):
+        """Make an arbitrary Koji API call"""
+        return KojiInter.backend.call_api(name, *args, **kwargs)
+
+
 # end of class KojiInter
 
 
@@ -403,6 +422,18 @@ class KojiShellInter(KojiBaseInter):
     def watch_tasks_with_retry(self, *_):
         log.debug('Watching tasks not implemented in Shell backend')
 
+    def call_api(self, name, *args, **kwargs):
+        noauth = kwargs.pop("noauth", False)
+        command = self.koji_cmd
+        if noauth:
+            command += ["--noauth"]
+        command += ["call", "--python", "--json-output", f"--kwargs={kwargs!r}", name]
+        command += args
+        out = utils.backtick(command)
+        try:
+            return json.loads(out)
+        except json.JSONDecodeError:
+            raise CallAPIError(out)
 
 def koji_error_wrap(description):
     """Decorator to wrap the body of a function in a try/except clause which
@@ -625,6 +656,15 @@ class KojiLibInter(KojiBaseInter):
         if tgt:
             return (tgt['build_tag_name'], tgt['dest_tag_name'])
         raise KojiError("Couldn't get info for target %s" % target)
+
+    def call_api(self, name, *args, **kwargs):
+        noauth = kwargs.pop("noauth", False)
+        if not self.kojisession:
+            self.init_koji_session(login=not noauth)
+        try:
+            return getattr(self.kojisession, name).__call__(*args, **kwargs)
+        except kojilib.GenericError as err:
+            raise CallAPIError(err)
 
     def regen_repo(self, tag):
         """Regenerate a repo"""
