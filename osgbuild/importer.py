@@ -79,7 +79,7 @@ def srpm_nv(srpm):
             pass
     raise Error("Unable to extract name and version from SRPM %s: %s" % (srpm, output))
 
-def make_svn_tree(srpm, url, dirname=None, extra_action=None, provider=None, sha1sum=None):
+def make_svn_tree(srpm, url, dirname=None, extra_action=None, provider=None, sha1sum=None, svn=True):
     """Create an svn tree for the srpm and populate it as follows:
     $name/osg/*.spec        - the spec file as extracted from the srpm
                               (if extract_spec is True)
@@ -97,13 +97,16 @@ def make_svn_tree(srpm, url, dirname=None, extra_action=None, provider=None, sha
         package_dir = os.path.join(package_dir, dirname)
 
     if not os.path.exists(package_dir):
-        utils.checked_call(["svn", "mkdir", package_dir])
+        if svn:
+            utils.checked_call(["svn", "mkdir", package_dir])
+        else:
+            os.mkdir(package_dir)
 
     osg_dir = os.path.join(package_dir, "osg")
     if extra_action == EXTRA_ACTION_DIFF_SPEC:
         diff_spec(abs_srpm, osg_dir, want_diff3=False)
     elif extra_action == EXTRA_ACTION_EXTRACT_SPEC:
-        extract_spec(abs_srpm, osg_dir)
+        extract_spec(abs_srpm, osg_dir, svn=svn)
     elif extra_action == EXTRA_ACTION_DIFF3_SPEC:
         if os.path.isdir(osg_dir):
             extract_orig_spec(osg_dir)
@@ -119,18 +122,21 @@ def make_svn_tree(srpm, url, dirname=None, extra_action=None, provider=None, sha
     upstream_dir = os.path.join(package_dir, "upstream")
 
     if not os.path.exists(upstream_dir):
-        utils.checked_call(["svn", "mkdir", upstream_dir])
+        if svn:
+            utils.checked_call(["svn", "mkdir", upstream_dir])
+        else:
+            os.mkdir(upstream_dir)
 
     cached_filename = os.path.join(name, version, os.path.basename(srpm))
 
-    make_source_file(url, cached_filename, upstream_dir, provider, sha1sum)
+    make_source_file(url, cached_filename, upstream_dir, provider, sha1sum, svn=svn)
 
     if len(glob.glob(os.path.join(upstream_dir, "*.source"))) > 1:
         logging.info("More than one .source file found in upstream dir.")
         logging.info("Examine them to make sure there aren't duplicates.")
 
 
-def make_source_file(url, cached_filename, upstream_dir, provider=None, sha1sum=None):
+def make_source_file(url, cached_filename, upstream_dir, provider=None, sha1sum=None, svn=True):
     """Create an upstream/*.source file with the appropriate name based
     on either `provider` or `url` if the former is not given.  Also add
     the new file to SVN.
@@ -156,7 +162,8 @@ def make_source_file(url, cached_filename, upstream_dir, provider=None, sha1sum=
         utils.unslurp(source_filename, source_contents)
     else:
         utils.unslurp(source_filename, source_contents)
-        svn_safe_add(source_filename)
+        if svn:
+            svn_safe_add(source_filename)
 
 
 def is_untracked_path(path):
@@ -333,7 +340,7 @@ def diff_spec(srpm, osg_dir, want_diff3=False):
         utils.popd()
 
 
-def extract_spec(srpm, osg_dir):
+def extract_spec(srpm, osg_dir, svn=True):
     """Extract the spec file from the SRPM, put it into an osg/ dir,
     and add both the osg/ dir and the spec file to SVN, if necessary.
     An existing spec file will be moved out of the way, with a .old
@@ -341,7 +348,8 @@ def extract_spec(srpm, osg_dir):
     """
     if not os.path.exists(osg_dir):
         os.mkdir(osg_dir)
-        svn_safe_add(osg_dir)
+        if svn:
+            svn_safe_add(osg_dir)
 
     utils.pushd(osg_dir)
     try:
@@ -357,7 +365,8 @@ def extract_spec(srpm, osg_dir):
 
         logging.info("Extracting new upstream spec file as %s", spec_name)
         extract_from_rpm(srpm, spec_name)
-        svn_safe_add(spec_name)
+        if svn:
+            svn_safe_add(spec_name)
     finally:
         utils.popd()
 
@@ -438,6 +447,10 @@ downloading and putting the SRPM into the upstream cache.
             help="The level of logging the script should do. "
             "Valid values are DEBUG,INFO,WARNING,ERROR,CRITICAL")
         parser.add_option(
+            "--no-svn", action="store_false", dest="svn",
+            help="Do not perform SVN operations, only create files and directories."
+        )
+        parser.add_option(
             "-o", "--output",
             help="The filename the upstream-url should be saved as.")
         parser.add_option(
@@ -482,8 +495,8 @@ downloading and putting the SRPM into the upstream cache.
         except IndexError:
             raise UsageError("Required argument <upstream-url> not provided")
 
-        if utils.unchecked_call("svn info &>/dev/null", shell=True):
-            raise Error("Must be called from an svn checkout!")
+        if options.svn and utils.unchecked_call("svn info &>/dev/null", shell=True) != 0:
+            raise Error("Must be called from an svn checkout to do svn operations! Pass --no-svn to skip those.")
 
         if not re.match(r'(http|https|ftp):', upstream_url):
             raise UsageError("upstream-url is not a valid url")
@@ -500,7 +513,8 @@ downloading and putting the SRPM into the upstream cache.
             options.dirname,
             options.extra_action,
             options.provider,
-            sha1sum
+            sha1sum,
+            options.svn,
         )
 
     except UsageError as e:
