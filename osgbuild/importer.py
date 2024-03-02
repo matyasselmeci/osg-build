@@ -24,7 +24,9 @@ EXTRA_ACTION_EXTRACT_SPEC = 'extract_spec'
 EXTRA_ACTION_DIFF3_SPEC = 'diff3_spec'
 EXTRA_ACTION_UPDATE = 'update'
 
+# fmt: off
 PROVIDER_PATTERNS = [
+    (r'cbs\.centos\.org'               , 'cbs')    ,
     (r'centos\.org'                    , 'centos') ,
     (r'emisoft\.web\.cern\.ch'         , 'emi')    ,
     (r'fedoraproject\.org/pub/epel/'   , 'epel')   ,
@@ -33,7 +35,7 @@ PROVIDER_PATTERNS = [
     (r'koji\.fedoraproject\.org/'      , 'fedora') ,
     (r'kojipkgs\.fedoraproject\.org/'  , 'fedora') ,
     (r'xrootd\.web\.cern\.ch/'         , 'xrootd') ]
-
+# fmt: on
 
 
 
