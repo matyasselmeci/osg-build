@@ -39,7 +39,6 @@ PROVIDER_PATTERNS = [
 # fmt: on
 
 
-
 class Error(Exception):
     """Base class for expected exceptions. Caught in main(); may include a
     traceback but will only print it if debugging is enabled.
@@ -69,6 +68,7 @@ def verify_rpm(srpm):
     if err:
         raise Error("rpm: %s does not look like an RPM" % srpm)
 
+
 def srpm_nv(srpm: str) -> Tuple[str, str]:
     """Return the NV (Name, Version) from an SRPM."""
     output, ret = utils.sbacktick(["rpm", "-qp", "--qf", "%{name} %{version}", srpm])
@@ -79,6 +79,7 @@ def srpm_nv(srpm: str) -> Tuple[str, str]:
         except ValueError:  # not enough/too many items
             pass
     raise Error("Unable to extract name and version from SRPM %s: %s" % (srpm, output))
+
 
 def make_svn_tree(srpm, url, dirname=None, extra_action=None, provider=None, sha1sum=None, svn=True):
     """Create an svn tree for the srpm and populate it as follows:
@@ -541,6 +542,7 @@ downloading and putting the SRPM into the upstream cache.
         return 1
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))
