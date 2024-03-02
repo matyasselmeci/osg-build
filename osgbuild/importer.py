@@ -9,6 +9,7 @@ from shlex import quote as shell_quote
 import shutil
 import sys
 import traceback
+from typing import Tuple
 
 from osgbuild import fetch_sources
 from osgbuild import utils
@@ -68,7 +69,7 @@ def verify_rpm(srpm):
     if err:
         raise Error("rpm: %s does not look like an RPM" % srpm)
 
-def srpm_nv(srpm):
+def srpm_nv(srpm: str) -> Tuple[str, str]:
     """Return the NV (Name, Version) from an SRPM."""
     output, ret = utils.sbacktick(["rpm", "-qp", "--qf", "%{name} %{version}", srpm])
     if ret == 0:
@@ -136,7 +137,12 @@ def make_svn_tree(srpm, url, dirname=None, extra_action=None, provider=None, sha
         logging.info("Examine them to make sure there aren't duplicates.")
 
 
-def make_source_file(url, cached_filename, upstream_dir, provider=None, sha1sum=None, svn=True):
+def make_source_file(url: str,
+                     cached_filename: str,
+                     upstream_dir: str,
+                     provider: str = None,
+                     sha1sum: str = None,
+                     svn=True):
     """Create an upstream/*.source file with the appropriate name based
     on either `provider` or `url` if the former is not given.  Also add
     the new file to SVN.
@@ -388,7 +394,7 @@ def extract_orig_spec(osg_dir):
         utils.popd()
 
 
-def move_to_cache(srpm, upstream_root):
+def move_to_cache(srpm: str, upstream_root: str):
     """Move the srpm to the upstream cache. Return the path to the file in the cache."""
     name, version = srpm_nv(srpm)
     base_srpm = os.path.basename(srpm)
@@ -491,7 +497,7 @@ downloading and putting the SRPM into the upstream cache.
         logging.basicConfig(format=" >> %(message)s", level=loglevel)
 
         try:
-            upstream_url = pos_args[0]
+            upstream_url = pos_args[0]  # type:str
         except IndexError:
             raise UsageError("Required argument <upstream-url> not provided")
 
