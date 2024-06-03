@@ -1,10 +1,12 @@
 import re
 import os
+import subprocess
 import time
 
 from datetime import datetime
 from .error import ClientCertError
 from . import utils
+
 
 class ClientCert(object):
     __slots__ = ['filename', 'first_commonname', 'startdate', 'enddate']
@@ -77,3 +79,42 @@ class ClientCert(object):
             raise ClientCertError(self.filename, "cert not valid yet")
 
 
+def krb_check_principal(principal: str) -> bool:
+    """
+    Return True if we have a valid ticket for the given Kerberos principal,
+    False otherwise.
+    """
+    try:
+        proc = subprocess.run(
+            ["klist", "-l"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=True
+        )
+        for line in proc.stdout.splitlines():
+            if b"(Expired)" in line:
+                continue
+            if principal.encode() in line:
+                return True
+        else:
+            return False
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return False
+
+
+def krb_kinit(principal: str, timeout: int = 180) -> bool:
+    """
+    Run kinit to get a new token for the principal interactively.
+    Return True on success, False on failure.
+    """
+    try:
+        subprocess.check_call(["kinit", principal], timeout=timeout)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        print("Unable to get new kerberos credential for principal %s" % principal)
+        return False
+    if krb_check_principal(principal):
+        return True
+    else:
+        print("Unable to validate new kerberos credential for principal %s" % principal)
+        return False

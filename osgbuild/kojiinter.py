@@ -15,6 +15,7 @@ import urllib.request, urllib.error
 from typing import Optional, List, NamedTuple, Set, Dict
 
 from .constants import *
+from . import credhelper
 from . import utils
 from .error import KojiError, type_of_error
 from .utils import split_nvr
@@ -150,8 +151,6 @@ class KojiInter(object):
 
         self.background = opts['background']
 
-
-
     def add_pkg(self, package_name):
         """Part of koji task. If the package needs to be added to koji_tag,
         do so.
@@ -225,8 +224,21 @@ class KojiShellInter(object):
         if login and not self.dry_run:
             self.login_to_koji()
 
+    def maybe_get_kerberos(self):
+        """
+        Check if we have a ticket for the desired Kerberos principal (if we know it and we're using Kerberos);
+        if not, use kinit to get a new one.
+        """
+        principal = getattr(self, "principal", "")
+        if getattr(self, "authtype", DEFAULT_AUTHTYPE) == "kerberos" and principal:
+            if not credhelper.krb_check_principal(principal):
+                log.info("No valid credential for principal %s; calling kinit to get a new one" % principal)
+                if not credhelper.krb_kinit(principal):
+                    raise KojiError("Kerberos authtype selected but can't get a valid credential")
+
     def login_to_koji(self):
         log.info("Logging in to koji using %s auth", self.authtype)
+        self.maybe_get_kerberos()
         try:
             output = utils.checked_backtick(self.koji_cmd + ["call", "--json", "getLoggedInUser"])
             output_js = json.loads(output)
@@ -477,7 +489,7 @@ class KojiLibInter(object):
                 pass
         except configparser.Error as err:
             raise KojiError("Can't read config file from %s: %s" % (config_file, err))
-        for var in ['ca', 'cert', 'server', 'serverca', 'weburl', 'topurl', 'authtype']:
+        for var in ['ca', 'cert', 'server', 'serverca', 'weburl', 'topurl', 'authtype', 'principal']:
             if items.get(var):
                 setattr(self, var, os.path.expanduser(items[var]))
 
@@ -492,6 +504,17 @@ class KojiLibInter(object):
         if login and not self.dry_run:
             self.login_to_koji()
 
+    def maybe_get_kerberos(self):
+        """
+        Check if we have a ticket for the desired Kerberos principal (if we know it and we're using Kerberos);
+        if not, use kinit to get a new one.
+        """
+        principal = getattr(self, "principal", "")
+        if getattr(self, "authtype", DEFAULT_AUTHTYPE) == "kerberos" and principal:
+            if not credhelper.krb_check_principal(principal):
+                log.info("No valid credential for principal %s; calling kinit to get a new one" % principal)
+                if not credhelper.krb_kinit(principal):
+                    raise KojiError("Kerberos authtype selected but can't get a valid credential")
 
     def login_to_koji(self):
         log.info("Logging in to koji using %s auth", self.authtype)
@@ -502,6 +525,7 @@ class KojiLibInter(object):
             except Exception as err:
                 raise KojiError("Couldn't do ssl_login: " + str(err))
         elif self.authtype == "kerberos":
+            self.maybe_get_kerberos()
             try:
                 self.kojisession.gssapi_login()
             except Exception as err:
