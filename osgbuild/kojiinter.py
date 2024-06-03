@@ -416,6 +416,24 @@ def koji_error_wrap(description):
     return koji_error_wrap_helper
 
 
+def _delete_traceback_filter(record):
+    """
+    A logging filter that just deletes the traceback from the record.
+    Used to make requests_gssapi's errors tolerable.
+    """
+    record.exc_info = None
+    return True
+
+
+try:
+    import requests_gssapi
+    # requests_gssapi logs a lengthy traceback in case of an error. Turn that off.
+    logging.getLogger("requests_gssapi").addFilter(_delete_traceback_filter)
+    logging.getLogger("requests_gssapi.gssapi_").addFilter(_delete_traceback_filter)
+except ImportError:
+    pass
+
+
 class KojiLibInter(object):
     # Aliasing for convenience
     if HAVE_KOJILIB:
