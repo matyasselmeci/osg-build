@@ -17,6 +17,7 @@ DATA_DIR = "/usr/share/osg-build"
 PROMOTER_INI = 'promoter.ini'
 SIGNING_KEYS_INI = 'signing_keys.ini'
 DEFAULT_AUTHTYPE = "kerberos"
+LOCAL_KOJI_INI = "koji.ini"
 
 KOJI_HUB = "https://koji.osg-htc.org"
 KOJI_WEB = "https://koji.osg-htc.org"
