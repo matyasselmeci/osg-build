@@ -487,16 +487,6 @@ rpmbuild     Build using rpmbuild(8) on the local machine
             help="Do not build package directly from SVN/Git "
             "(default for scratch builds)")
         koji_group.add_option(
-            "--3.5-upcoming", action="callback",
-            callback=parser_targetopts_callback,
-            type=None,
-            help="Target build for the 3.5-upcoming osg repos.")
-        koji_group.add_option(
-            "--3.6-upcoming", action="callback",
-            callback=parser_targetopts_callback,
-            type=None,
-            help="Target build for the 3.6-upcoming osg repos.")
-        koji_group.add_option(
             "--repo", action="callback",
             callback=parser_targetopts_callback,
             type="string", dest="repo",
@@ -551,7 +541,7 @@ def parser_targetopts_callback(option, opt_str, value, parser, *args, **kwargs):
     --koji-tag=el7-foobar will implicitly turn on el7 builds.
 
     Also handle --ktt (--koji-tag-and-target), which sets both koji_tag
-    and koji_target, and --upcoming, and --repo, which sets the target for both dvers.
+    and koji_target, and --repo, which sets the target for both dvers.
 
     """
     # for options that have aliases, option.dest gives us the
@@ -587,13 +577,6 @@ def parser_targetopts_callback(option, opt_str, value, parser, *args, **kwargs):
         assert kojiinter  # shouldn't get here without kojiinter
         for dver in targetopts_by_dver:
             targetopts_by_dver[dver]['koji_tag'] = 'TARGET'
-    elif opt_str.endswith('upcoming'):
-        assert kojiinter  # shouldn't get here without kojiinter
-        repo = opt_str[2:]
-        parser.values.repo = repo
-        for dver in DVERS:
-            targetopts_by_dver[dver]['koji_target'] = target_for_repo_hint(repo, dver)
-            targetopts_by_dver[dver]['koji_tag'] = tag_for_repo_hint(repo, dver)
     elif opt_str == '--repo':
         assert kojiinter  # shouldn't get here without kojiinter
         parser.values.repo = value
@@ -708,7 +691,7 @@ def get_buildopts(options, task):
                 buildopts['enabled_dvers'] = set(DEFAULT_DVERS)
         else:
             machine_dver = utils.get_local_machine_dver() or FALLBACK_DVER
-            buildopts['enabled_dvers'] = set([machine_dver])
+            buildopts['enabled_dvers'] = {machine_dver}
 
     # Hack: make --mock-config on command line override
     # --mock-config-from-koji from config file
