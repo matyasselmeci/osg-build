@@ -12,6 +12,7 @@ import sys
 import tempfile
 import configparser
 
+from utils import get_dver_from_string
 from .constants import *
 from .error import UsageError, KojiError, SVNError, GitError, Error, type_of_error
 from . import srpm
@@ -47,7 +48,7 @@ def main(argv=None):
         argv = sys.argv
 
     buildopts, package_dirs, task = init(argv)
-    vcs = None
+    vcs_module = None
 
     if task in ['koji', 'mock']:
         for build_dver in buildopts['enabled_dvers']:
@@ -56,27 +57,25 @@ def main(argv=None):
                 targetopts['koji_target'] = targetopts['koji_target'] or target_for_repo_hint(buildopts['repo'], build_dver)
                 targetopts['koji_tag'] = targetopts['koji_tag'] or tag_for_repo_hint(buildopts['repo'], build_dver)
     # checks
-    if task == 'koji' and buildopts['vcs']:
+    if task == 'koji' and buildopts['want_vcs']:
         # verify working dirs
         for pkg in package_dirs:
-            # vcs is the module for accessing the repo
-            vcs = svn if svn.is_svn(pkg) else git if git.is_git(pkg) else None
-            if vcs and not utils.is_url(pkg):
+            # vcs_module is the module for accessing the repo
+            vcs_module = svn if svn.is_svn(pkg) else git if git.is_git(pkg) else None
+            if not vcs_module:
+                log.error("VCS build requested but could not determine VCS (SVN or Git) for %s", pkg)
+                return 1
+
+            if not utils.is_url(pkg):
                 try:
-                    vcs.verify_working_dir(pkg)
+                    vcs_module.verify_working_dir(pkg)
                 except (SVNError, GitError) as err:
                     log.error(str(err))
                     log.error("VCS build requested but no usable VCS (SVN or Git) found for %s", pkg)
                     return 1
 
             if not buildopts['scratch']:
-                if not vcs:
-                    log.error(
-                        "Non-scratch builds must be built from a VCS and no usable VCS (SVN or Git) was found for %s",
-                        pkg
-                    )
-                    return 1
-                vcs.verify_correct_branch(pkg, buildopts)
+                vcs_module.verify_correct_branch(pkg, buildopts)
     else:
         # verify package dirs
         for pkg in package_dirs:
@@ -87,9 +86,6 @@ def main(argv=None):
                 raise UsageError(pkg +
                     " isn't a package directory "
                     "(must have either osg/ or upstream/ dirs or both)")
-
-    if (task == 'koji' and not buildopts['scratch'] and not buildopts['vcs']):
-        raise UsageError("Non-scratch Koji builds must be from SVN!")
 
     if task == 'koji' and len(package_dirs) >= BACKGROUND_THRESHOLD:
         buildopts['background'] = True
@@ -119,8 +115,8 @@ def main(argv=None):
                     koji_obj = kojiinter.KojiInter(dver_buildopts_)
                 mock_obj = mock.Mock(dver_buildopts, koji_obj)
 
-            if buildopts['vcs'] and task == 'koji':
-                task_ids.append(vcs.koji(pkg, koji_obj, dver_buildopts))
+            if buildopts['want_vcs'] and task == 'koji':
+                task_ids.append(vcs_module.koji(pkg, koji_obj, dver_buildopts))
             else:
                 builder = srpm.SRPMBuild(pkg,
                                          dver_buildopts,
@@ -151,7 +147,7 @@ def main(argv=None):
             # TODO This is not implemented for the KojiShellInter backend
             # Not implemented for SVN builds since results_dir is undefined for those
             if buildopts['getfiles']:
-                if buildopts['vcs']:
+                if buildopts['want_vcs']:
                     log.warning("--getfiles is only for SRPM builds")
                 elif not isinstance(kojiinter.KojiInter.backend, kojiinter.KojiLibInter):
                     log.warning("--getfiles is only implemented on the KojiLib backend")
@@ -364,11 +360,6 @@ rpmbuild     Build using rpmbuild(8) on the local machine
     parser.add_option(
         "--version", action="store_true",
         help="Show version and exit.")
-    parser.add_option(
-        "-w", "--working-directory",
-        help="The base directory to use for temporary files made by the "
-        "script. If it is 'TEMP', a randomly-named directory under /tmp "
-        "is used. Default: package directory")
 
     prebuild_group = OptionGroup(parser,
                                  "prebuild task options")
@@ -471,13 +462,9 @@ rpmbuild     Build using rpmbuild(8) on the local machine
             "--no-scratch", "--noscratch", action="store_false", dest="scratch",
             help="Do not perform a scratch build (default)")
         koji_group.add_option(
-            "--vcs", "--svn", action="store_true", dest="vcs",
-            help="Build package directly from SVN/Git "
-            "(default for non-scratch builds)")
-        koji_group.add_option(
-            "--no-vcs", "--novcs", "--no-svn", "--nosvn", action="store_false", dest="vcs",
-            help="Do not build package directly from SVN/Git "
-            "(default for scratch builds)")
+            "--vcs", "--svn", action="store_true", dest="want_vcs",
+            help="Build package directly from SVN/Git (always true for non-scratch builds)"
+        )
         koji_group.add_option(
             "--repo", action="callback",
             callback=parser_targetopts_callback,
@@ -490,22 +477,13 @@ rpmbuild     Build using rpmbuild(8) on the local machine
         )
         parser.add_option_group(koji_group)
 
+    parser.set_defaults(want_vcs=False)
+
     options, args = parser.parse_args(argv[1:])
 
     return (options, args)
 # end of parse_cmdline_args()
 
-
-def get_dver_from_string(s):
-    """Get the EL major version from a string containing it.
-    Return None if not found."""
-    if not s:
-        return None
-    match = re.search(r'\b(el\d+)\b', s)
-    if match is not None:
-        return match.group(1)
-    else:
-        return None
 
 def target_for_repo_hint(repo_hint, dver):
     hints = repo_hints(valid_koji_targets())
@@ -640,9 +618,6 @@ def get_buildopts(options, task):
 
     buildopts = DEFAULT_BUILDOPTS_COMMON.copy()
 
-    # Backward compatibility for 'svn' option:
-    buildopts['vcs'] = buildopts.get('vcs') or buildopts.get('svn')
-
     # Overrides from command line
     for optname in options.__dict__.keys():
         optval = getattr(options, optname, None)
@@ -685,11 +660,9 @@ def get_buildopts(options, task):
             machine_dver = utils.get_local_machine_dver() or FALLBACK_DVER
             buildopts['enabled_dvers'] = {machine_dver}
 
-    if kojiinter and buildopts['vcs'] is None and task == 'koji':
-        if buildopts['scratch']:
-            buildopts['vcs'] = False
-        else:
-            buildopts['vcs'] = True
+    if kojiinter and task == "koji":
+        if not buildopts["scratch"]:
+            buildopts['want_vcs'] = True
 
     return buildopts
 # end of get_buildopts()

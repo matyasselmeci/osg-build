@@ -98,7 +98,6 @@ DEFAULT_BUILDOPTS_COMMON = {
     'regen_repos': False,
     'repo': 'osg',
     'scratch': False,
-    'vcs': None,
     'target_arch': None,
     'working_directory': '.',
 }
