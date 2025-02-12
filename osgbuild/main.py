@@ -51,8 +51,8 @@ def main(argv=None):
 
     if task in ['koji', 'mock']:
         for build_dver in buildopts['enabled_dvers']:
-            targetopts = buildopts['targetopts_by_dver'][build_dver]
             if kojiinter:
+                targetopts = buildopts['targetopts_by_dver'][build_dver]  # modified in-place!
                 targetopts['koji_target'] = targetopts['koji_target'] or target_for_repo_hint(buildopts['repo'], build_dver)
                 targetopts['koji_tag'] = targetopts['koji_tag'] or tag_for_repo_hint(buildopts['repo'], build_dver)
     # checks
@@ -229,7 +229,7 @@ def valid_dvers(targets):
     targets: a list of koji targets returned by valid_koji_targets"""
     dvers = set()
     for target in targets:
-        dver = get_dver_from_string(target)
+        dver = utils.get_dver_from_string(target)
         if dver:
             dvers.add(dver)
     return sorted(dvers)
@@ -576,7 +576,7 @@ def parser_targetopts_callback(option, opt_str, value, parser, *args, **kwargs):
             targetopts_by_dver[dver]['koji_target'] = target_for_repo_hint(value, dver)
             targetopts_by_dver[dver]['koji_tag'] = tag_for_repo_hint(value, dver)
     else:
-        dver = get_dver_from_string(value)
+        dver = utils.get_dver_from_string(value)
 
         if not dver:
             raise OptionValueError('Unable to determine redhat release in parameter %r: %r' % (opt_str, value))
@@ -685,15 +685,6 @@ def get_buildopts(options, task):
             machine_dver = utils.get_local_machine_dver() or FALLBACK_DVER
             buildopts['enabled_dvers'] = {machine_dver}
 
-    # Hack: make --mock-config on command line override
-    # --mock-config-from-koji from config file
-    if getattr(options, 'mock_config', None) is not None:
-        buildopts['mock_config_from_koji'] = None
-
-    # If set, --mock-config-from-koji overrides --mock-config
-    if buildopts.get('mock_config_from_koji', None):
-        buildopts['mock_config'] = None
-
     if kojiinter and buildopts['vcs'] is None and task == 'koji':
         if buildopts['scratch']:
             buildopts['vcs'] = False
@@ -747,9 +738,9 @@ def verify_release_in_targetopts_by_dver(targetopts_by_dver):
         return all((same_or_none2(args[x], args[y]) for x in range(len(args)) for y in range(x, len(args))))
 
     # Verify consistency
-    dist_dver = get_dver_from_string(distro_tag)
-    target_dver = get_dver_from_string(koji_target)
-    tag_dver = get_dver_from_string(koji_tag)
+    dist_dver = utils.get_dver_from_string(distro_tag)
+    target_dver = utils.get_dver_from_string(koji_target)
+    tag_dver = utils.get_dver_from_string(koji_tag)
 
     if not same_or_none(dver, dist_dver, tag_dver, target_dver):
         return None
