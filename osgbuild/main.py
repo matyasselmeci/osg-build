@@ -144,24 +144,14 @@ def main(argv=None):
             print(koji_weburl + "/taskinfo?taskID=" + str(tid))
         if not buildopts['no_wait']:
             ret = kojiinter.KojiInter.backend.watch_tasks_with_retry(task_ids)
-            # TODO This is not implemented for the KojiShellInter backend
-            # Not implemented for SVN builds since results_dir is undefined for those
             if buildopts['getfiles']:
-                if buildopts['want_vcs']:
-                    log.warning("--getfiles is only for SRPM builds")
-                elif not isinstance(kojiinter.KojiInter.backend, kojiinter.KojiLibInter):
-                    log.warning("--getfiles is only implemented on the KojiLib backend")
-                else:
-                    for destdir, tids in task_ids_by_results_dir.items():
-                        if kojiinter.KojiInter.backend.download_results(tids, destdir):
-                            log.info("Results and logs downloaded to %s", destdir)
+                for destdir, tids in task_ids_by_results_dir.items():
+                    if kojiinter.KojiInter.backend.download_results(tids, destdir):
+                        log.info("Results and logs downloaded to %s", destdir)
             try:
                 return int(ret)
             except (TypeError, ValueError):
                 pass
-        else:
-            if buildopts['getfiles']:
-                log.warning("Cannot use both --getfiles and --nowait")
 
     return 0
 # end of main()
@@ -663,6 +653,14 @@ def get_buildopts(options, task):
     if kojiinter and task == "koji":
         if not buildopts["scratch"]:
             buildopts['want_vcs'] = True
+        if buildopts["getfiles"]:
+            if buildopts["want_vcs"]:
+                # results_dir is undefined for VCS builds
+                raise UsageError("--getfiles is only for SRPM builds")
+            elif buildopts["no_wait"]:
+                raise UsageError("Cannot use both --getfiles and --nowait")
+            elif buildopts.get("koji_backend") == "shell" or not kojiinter.HAVE_KOJILIB:
+                raise UsageError("--getfiles is only implemented on the KojiLib backend")
 
     return buildopts
 # end of get_buildopts()
