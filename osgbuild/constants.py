@@ -85,7 +85,6 @@ GIT_REMOTE_MAPS = {HCC_AUTH_REMOTE: HCC_REMOTE,
                    CHTC_AUTH_REMOTE: CHTC_REMOTE}
 
 DEFAULT_BUILDOPTS_COMMON = {
-    'autoclean': True,
     'background': False,
     'cache_prefix': 'AUTO',
     'dry_run': False,

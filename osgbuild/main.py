@@ -126,7 +126,7 @@ def main(argv=None):
                                          dver_buildopts,
                                          mock_obj=mock_obj,
                                          koji_obj=koji_obj)
-                builder.maybe_autoclean()
+                builder.clean_previous()
                 method = getattr(builder, task)
                 if task == 'koji':
                     task_ids_by_results_dir.setdefault(builder.results_dir, [])
@@ -324,14 +324,6 @@ rpmbuild     Build using rpmbuild(8) on the local machine
         header += "\n" + header_post
 
     parser = OptionParser(header)
-    parser.add_option(
-        "-a", "--autoclean", action="store_true",
-        help="Clean out the following directories before each build: "
-        "'%s', '%s', '%s', '%s' (default)" % (
-            WD_RESULTS, WD_PREBUILD, WD_UNPACKED, WD_UNPACKED_TARBALL))
-    parser.add_option(
-        "--no-autoclean", action="store_false", dest="autoclean",
-        help="Disable autoclean")
     parser.add_option(
         "-c", "--cache-prefix",
         help="The prefix for the software cache to take source files from. "
