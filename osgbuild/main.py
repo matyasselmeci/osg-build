@@ -42,24 +42,27 @@ log.addHandler(log_consolehandler)
 #-------------------------------------------------------------------------------
 # Main function
 #-------------------------------------------------------------------------------
-def main(argv=None):
-    """Main function."""
-    if argv is None:
-        argv = sys.argv
 
-    buildopts, package_dirs, task = init(argv)
+
+def koji_main(buildopts, package_dirs):
+    # TODO Document
+    if not kojiinter:
+        raise KojiError("Koji module is not available")
+
+    for build_dver in buildopts['enabled_dvers']:
+        targetopts = buildopts['targetopts_by_dver'][build_dver]  # modified in-place!
+        targetopts['koji_target'] = targetopts['koji_target'] or target_for_repo_hint(buildopts['repo'], build_dver)
+        targetopts['koji_tag'] = targetopts['koji_tag'] or tag_for_repo_hint(buildopts['repo'], build_dver)
+
     vcs_module = None
 
-    if task in ['koji', 'mock']:
-        for build_dver in buildopts['enabled_dvers']:
-            if kojiinter:
-                targetopts = buildopts['targetopts_by_dver'][build_dver]  # modified in-place!
-                targetopts['koji_target'] = targetopts['koji_target'] or target_for_repo_hint(buildopts['repo'], build_dver)
-                targetopts['koji_tag'] = targetopts['koji_tag'] or tag_for_repo_hint(buildopts['repo'], build_dver)
-    # checks
-    if task == 'koji' and buildopts['want_vcs']:
-        # verify working dirs
-        for pkg in package_dirs:
+    #
+    # Verify package dirs
+    #
+
+    for pkg in package_dirs:
+        if buildopts['want_vcs']:
+            # verify working dirs
             # vcs_module is the module for accessing the repo
             vcs_module = svn if svn.is_svn(pkg) else git if git.is_git(pkg) else None
             if not vcs_module:
@@ -76,24 +79,69 @@ def main(argv=None):
 
             if not buildopts['scratch']:
                 vcs_module.verify_correct_branch(pkg, buildopts)
-    else:
-        # verify package dirs
-        for pkg in package_dirs:
-            if not os.path.isdir(pkg):
-                raise UsageError(pkg + " isn't a directory!")
-            if ((not os.path.isdir(os.path.join(pkg, "osg"))) and
-                    (not os.path.isdir(os.path.join(pkg, "upstream")))):
-                raise UsageError(pkg +
-                    " isn't a package directory "
-                    "(must have either osg/ or upstream/ dirs or both)")
+        else:
+            is_pkg_dir(pkg)
 
-    if task == 'koji' and len(package_dirs) >= BACKGROUND_THRESHOLD:
-        buildopts['background'] = True
+    #
+    # Main loop
+    #
 
-    # main loop
-    # HACK
     task_ids = []
     task_ids_by_results_dir = dict()
+
+    for pkg in package_dirs:
+        log.info("Performing task koji on package %s", pkg if utils.is_url(pkg) else os.path.basename(pkg))
+        for build_dver in buildopts['enabled_dvers']:
+            dver_buildopts = buildopts.copy()
+            dver_buildopts.update(buildopts['targetopts_by_dver'][build_dver])
+
+            koji_obj = kojiinter.KojiInter(dver_buildopts)
+
+            if buildopts['want_vcs']:
+                assert vcs_module
+                task_ids.append(vcs_module.koji(pkg, koji_obj, dver_buildopts))
+            else:
+                builder = srpm.SRPMBuild(
+                    pkg,
+                    dver_buildopts,
+                    mock_obj=None,
+                    koji_obj=koji_obj
+                )
+                builder.clean_previous()
+                task_ids_by_results_dir.setdefault(builder.results_dir, [])
+                task_id = builder.koji()
+                task_ids.append(task_id)
+                task_ids_by_results_dir[builder.results_dir].append(task_id)
+
+    #
+    # End of main loop
+    #
+
+    return watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir)
+
+
+def main(argv=None):
+    """Main function."""
+    if argv is None:
+        argv = sys.argv
+
+    buildopts, package_dirs, task = init(argv)
+
+    if task == "koji":
+        return koji_main(buildopts, package_dirs)
+
+    if task == "mock":
+        for build_dver in buildopts['enabled_dvers']:
+            if kojiinter:
+                targetopts = buildopts['targetopts_by_dver'][build_dver]  # modified in-place!
+                targetopts['koji_target'] = targetopts['koji_target'] or target_for_repo_hint(buildopts['repo'], build_dver)
+                targetopts['koji_tag'] = targetopts['koji_tag'] or tag_for_repo_hint(buildopts['repo'], build_dver)
+
+    # verify package dirs
+    for pkg in package_dirs:
+        is_pkg_dir(pkg)
+
+    # main loop
     for pkg in package_dirs:
         log.info("Performing task %s on package %s", task, pkg if utils.is_url(pkg) else os.path.basename(pkg))
         for build_dver in buildopts['enabled_dvers']:
@@ -102,9 +150,6 @@ def main(argv=None):
 
             mock_obj = None
             koji_obj = None
-            if task == 'koji':
-                assert kojiinter  # shouldn't get here without osg-build-koji
-                koji_obj = kojiinter.KojiInter(dver_buildopts)
             if task == 'mock':
                 assert mock  # shouldn't get here without osg-build-mock
                 if dver_buildopts['mock_config_from_koji']:
@@ -115,23 +160,20 @@ def main(argv=None):
                     koji_obj = kojiinter.KojiInter(dver_buildopts_)
                 mock_obj = mock.Mock(dver_buildopts, koji_obj)
 
-            if buildopts['want_vcs'] and task == 'koji':
-                task_ids.append(vcs_module.koji(pkg, koji_obj, dver_buildopts))
-            else:
-                builder = srpm.SRPMBuild(pkg,
-                                         dver_buildopts,
-                                         mock_obj=mock_obj,
-                                         koji_obj=koji_obj)
-                builder.clean_previous()
-                method = getattr(builder, task)
-                if task == 'koji':
-                    task_ids_by_results_dir.setdefault(builder.results_dir, [])
-                    task_id = method()
-                    task_ids.append(task_id)
-                    task_ids_by_results_dir[builder.results_dir].append(task_id)
-                else:
-                    method()
+            builder = srpm.SRPMBuild(pkg,
+                                     dver_buildopts,
+                                     mock_obj=mock_obj,
+                                     koji_obj=koji_obj)
+            builder.clean_previous()
+            method = getattr(builder, task)
+            method()
     # end of main loop
+
+    return 0
+
+
+def watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir):
+    # TODO Document
     # HACK
     task_ids = sorted(filter(None, task_ids))
     if kojiinter and kojiinter.KojiInter.backend and task_ids:
@@ -142,18 +184,29 @@ def main(argv=None):
         print("Koji task ids are:", task_ids)
         for tid in task_ids:
             print(koji_weburl + "/taskinfo?taskID=" + str(tid))
-        if not buildopts['no_wait']:
-            ret = kojiinter.KojiInter.backend.watch_tasks_with_retry(task_ids)
-            if buildopts['getfiles']:
-                for destdir, tids in task_ids_by_results_dir.items():
-                    if kojiinter.KojiInter.backend.download_results(tids, destdir):
-                        log.info("Results and logs downloaded to %s", destdir)
-            try:
-                return int(ret)
-            except (TypeError, ValueError):
-                pass
+        if buildopts["no_wait"]:
+            return 0
+    ret = kojiinter.KojiInter.backend.watch_tasks_with_retry(task_ids)
+    if buildopts['getfiles']:
+        for destdir, tids in task_ids_by_results_dir.items():
+            if kojiinter.KojiInter.backend.download_results(tids, destdir):
+                log.info("Results and logs downloaded to %s", destdir)
+    try:
+        return int(ret)
+    except (TypeError, ValueError):
+        pass
 
-    return 0
+
+def is_pkg_dir(pkg):
+    if not os.path.isdir(pkg):
+        raise UsageError(pkg + " isn't a directory!")
+    if ((not os.path.isdir(os.path.join(pkg, "osg"))) and
+            (not os.path.isdir(os.path.join(pkg, "upstream")))):
+        raise UsageError(pkg +
+                         " isn't a package directory "
+                         "(must have either osg/ or upstream/ dirs or both)")
+
+
 # end of main()
 
 
@@ -190,6 +243,9 @@ def init(argv):
     if not package_dirs:
         guess = guess_pkg_dir(os.getcwd())
         package_dirs.append(guess)
+
+    if len(package_dirs) >= BACKGROUND_THRESHOLD:
+        buildopts["background"] = True
 
     return (buildopts, package_dirs, task)
 # end of init()
