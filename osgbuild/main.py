@@ -11,7 +11,7 @@ import configparser
 
 from utils import get_dver_from_string
 from .constants import *
-from .error import UsageError, KojiError, SVNError, GitError, Error, type_of_error
+from .error import UsageError, KojiError, VCSError, Error, type_of_error
 from . import srpm
 from . import svn
 from . import git
@@ -42,7 +42,14 @@ log.addHandler(log_consolehandler)
 
 
 def koji_main(buildopts, package_dirs):
-    # TODO Document
+    """
+    Main function for the "koji" task.  Verify package directories (or URLs)
+    and run a Koji build for each of them, downloading the results if in
+    'getfiles' mode.
+    Args:
+        buildopts: build options
+        package_dirs: a list of package directories or URLs
+    """
     if not kojiinter:
         raise KojiError("Koji module is not available")
 
@@ -58,16 +65,14 @@ def koji_main(buildopts, package_dirs):
             # vcs_module is the module for accessing the repo
             vcs_module = svn if svn.is_svn(pkg) else git if git.is_git(pkg) else None
             if not vcs_module:
-                log.error("VCS build requested but could not determine VCS (SVN or Git) for %s", pkg)
-                return 1
+                raise VCSError("VCS build requested but could not determine VCS (SVN or Git) for %s", pkg)
 
             if not utils.is_url(pkg):
                 try:
                     vcs_module.verify_working_dir(pkg)
-                except (SVNError, GitError) as err:
-                    log.error(str(err))
+                except VCSError as err:
                     log.error("VCS build requested but no usable VCS (SVN or Git) found for %s", pkg)
-                    return 1
+                    raise
 
             if not buildopts['scratch']:
                 vcs_module.verify_correct_branch(pkg, buildopts)
@@ -111,7 +116,7 @@ def koji_main(buildopts, package_dirs):
     # End of main loop
     #
 
-    return watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir)
+    watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir)
 
 
 def main(argv=None):
@@ -161,8 +166,19 @@ def main(argv=None):
 
 
 def watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir):
-    # TODO Document
-    # HACK
+    """
+    Print the task IDs and the Koji URLs where they can be watched.
+    If we're in no_wait mode, print out the osg-koji command to watch
+    the tasks; otherwise,  have Koji watch the tasks and print
+    out their progress.  If we know the results dirs and getfiles is on,
+    also get the logs and the files at the end.
+
+    Args:
+        buildopts: The build options dict
+        task_ids: A list of Koji task IDs
+        task_ids_by_results_dir: A dict, keyed by results_dir, of the lists
+            of the associated tasks; only used if getfiles is on.
+    """
     task_ids = sorted(filter(None, task_ids))
     if kojiinter and kojiinter.KojiInter.backend and task_ids:
         try:
@@ -177,16 +193,11 @@ def watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir):
             print("To watch tasks, run:")
             print("osg-koji watch-tasks %s" % " ".join(task_ids))
             print()
-            return 0
-    ret = kojiinter.KojiInter.backend.watch_tasks_with_retry(task_ids)
+    kojiinter.KojiInter.backend.watch_tasks_with_retry(task_ids)
     if buildopts['getfiles']:
         for destdir, tids in task_ids_by_results_dir.items():
             if kojiinter.KojiInter.backend.download_results(tids, destdir):
                 log.info("Results and logs downloaded to %s", destdir)
-    try:
-        return int(ret)
-    except (TypeError, ValueError):
-        pass
 
 
 def is_pkg_dir(pkg):
