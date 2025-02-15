@@ -6,16 +6,13 @@ import json
 import logging
 import random
 import re
-import os
 import string
-import sys
 import time
 import urllib
 import urllib.request, urllib.error
 from typing import Optional, List, NamedTuple, Set, Dict
 
 from .constants import *
-from . import clientcert, constants
 from . import utils
 from .error import KojiError, type_of_error
 from .utils import split_nvr
@@ -125,7 +122,7 @@ class KojiInter(object):
     """An interface around the koji cli"""
     backend = None
 
-    def __init__(self, opts):
+    def __init__(self, opts, dry_run=None):
         self.no_wait = opts['no_wait']
         self.regen_repos = opts['regen_repos']
         self.scratch = opts['scratch']
@@ -133,16 +130,18 @@ class KojiInter(object):
         if self.arch_override and not self.scratch:
             log.warning("target-arch ignored on non-scratch builds")
             self.arch_override = None
+        if dry_run is None:
+            dry_run = opts['dry_run']
 
         if KojiInter.backend is None:
             if not HAVE_KOJILIB and opts['koji_backend'] == 'kojilib':
                 raise KojiError("KojiLib backend requested, but can't import it!")
             elif HAVE_KOJILIB and opts.get('koji_backend') != 'shell':
                 log.debug("KojiInter Using KojiLib backend")
-                KojiInter.backend = KojiLibInter(opts['dry_run'])
+                KojiInter.backend = KojiLibInter(dry_run)
             else:
                 log.debug("KojiInter Using shell backend")
-                KojiInter.backend = KojiShellInter(opts['dry_run'])
+                KojiInter.backend = KojiShellInter(dry_run)
             KojiInter.backend.read_config_file()
             KojiInter.backend.init_koji_session()
 

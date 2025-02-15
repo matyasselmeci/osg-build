@@ -1,9 +1,6 @@
 """osg build script"""
 
 
-# TODO Shouldn't need koji access for 'rpmbuild', but currently does since it
-# gets the values for the --repo arg -- which is only used for koji builds.
-# Make it so.
 import logging
 import traceback
 from optparse import OptionGroup, OptionParser, OptionValueError
@@ -49,11 +46,6 @@ def koji_main(buildopts, package_dirs):
     if not kojiinter:
         raise KojiError("Koji module is not available")
 
-    for build_dver in buildopts['enabled_dvers']:
-        targetopts = buildopts['targetopts_by_dver'][build_dver]  # modified in-place!
-        targetopts['koji_target'] = targetopts['koji_target'] or target_for_repo_hint(buildopts['repo'], build_dver)
-        targetopts['koji_tag'] = targetopts['koji_tag'] or tag_for_repo_hint(buildopts['repo'], build_dver)
-
     vcs_module = None
 
     #
@@ -92,8 +84,10 @@ def koji_main(buildopts, package_dirs):
     for pkg in package_dirs:
         log.info("Performing task koji on package %s", pkg if utils.is_url(pkg) else os.path.basename(pkg))
         for build_dver in buildopts['enabled_dvers']:
-            dver_buildopts = buildopts.copy()
+            dver_buildopts = buildopts.copy()  # type: dict
             dver_buildopts.update(buildopts['targetopts_by_dver'][build_dver])
+            dver_buildopts.setdefault('koji_target', target_for_repo_hint(buildopts['repo'], build_dver))
+            dver_buildopts.setdefault('koji_tag', target_for_repo_hint(buildopts['repo'], build_dver))
 
             koji_obj = kojiinter.KojiInter(dver_buildopts)
 
@@ -130,23 +124,19 @@ def main(argv=None):
     if task == "koji":
         return koji_main(buildopts, package_dirs)
 
-    if task == "mock":
-        for build_dver in buildopts['enabled_dvers']:
-            if kojiinter:
-                targetopts = buildopts['targetopts_by_dver'][build_dver]  # modified in-place!
-                targetopts['koji_target'] = targetopts['koji_target'] or target_for_repo_hint(buildopts['repo'], build_dver)
-                targetopts['koji_tag'] = targetopts['koji_tag'] or tag_for_repo_hint(buildopts['repo'], build_dver)
-
     # verify package dirs
     for pkg in package_dirs:
         is_pkg_dir(pkg)
 
     # main loop
     for pkg in package_dirs:
-        log.info("Performing task %s on package %s", task, pkg if utils.is_url(pkg) else os.path.basename(pkg))
+        log.info("Performing task %s on package %s", task, os.path.basename(pkg))
         for build_dver in buildopts['enabled_dvers']:
             dver_buildopts = buildopts.copy()
             dver_buildopts.update(buildopts['targetopts_by_dver'][build_dver])
+            if task == "mock" and kojiinter:
+                dver_buildopts.setdefault('koji_target', target_for_repo_hint(buildopts['repo'], build_dver))
+                dver_buildopts.setdefault('koji_tag', target_for_repo_hint(buildopts['repo'], build_dver))
 
             mock_obj = None
             koji_obj = None
@@ -154,10 +144,8 @@ def main(argv=None):
                 assert mock  # shouldn't get here without osg-build-mock
                 if dver_buildopts['mock_config_from_koji']:
                     assert kojiinter  # shouldn't get here without osg-build-koji
-                    # HACK: We don't want to log in to koji just to get a mock config
-                    dver_buildopts_ = dver_buildopts.copy()
-                    dver_buildopts_['dry_run'] = True
-                    koji_obj = kojiinter.KojiInter(dver_buildopts_)
+                    # We don't want to log in to koji just to get a mock config
+                    koji_obj = kojiinter.KojiInter(dver_buildopts, dry_run=True)
                 mock_obj = mock.Mock(dver_buildopts, koji_obj)
 
             builder = srpm.SRPMBuild(pkg,
@@ -185,6 +173,10 @@ def watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir):
         for tid in task_ids:
             print(koji_weburl + "/taskinfo?taskID=" + str(tid))
         if buildopts["no_wait"]:
+            print()
+            print("To watch tasks, run:")
+            print("osg-koji watch-tasks %s" % " ".join(task_ids))
+            print()
             return 0
     ret = kojiinter.KojiInter.backend.watch_tasks_with_retry(task_ids)
     if buildopts['getfiles']:
@@ -207,7 +199,6 @@ def is_pkg_dir(pkg):
                          "(must have either osg/ or upstream/ dirs or both)")
 
 
-# end of main()
 
 
 def init(argv):
