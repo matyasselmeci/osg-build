@@ -9,7 +9,6 @@ import sys
 import tempfile
 import configparser
 
-from utils import get_dver_from_string
 from .constants import *
 from .error import UsageError, KojiError, VCSError, Error, type_of_error
 from . import srpm
@@ -70,7 +69,7 @@ def koji_main(buildopts, package_dirs):
             if not utils.is_url(pkg):
                 try:
                     vcs_module.verify_working_dir(pkg)
-                except VCSError as err:
+                except VCSError:
                     log.error("VCS build requested but no usable VCS (SVN or Git) found for %s", pkg)
                     raise
 
@@ -543,7 +542,7 @@ def target_for_repo_hint(repo_hint, dver):
 def tag_for_repo_hint(repo_hint, dver):
     return repo_hints(valid_koji_targets())[repo_hint]['tag'] % {'dver': dver}
 
-def parser_targetopts_callback(option, opt_str, value, parser, *args, **kwargs): # unused-args: pylint:disable=W0613
+def parser_targetopts_callback(option, opt_str, value, parser, *_, **__):
     """Handle options in the 'targetopts_by_dver' set, such as --koji-tag,
     --redhat-release, etc.
 
