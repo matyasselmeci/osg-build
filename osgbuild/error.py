@@ -38,7 +38,7 @@ class ConfigErrors(Error):
 class VCSError(Error):
     """Errors related to version control systems"""
     def __init__(self, msg):
-        Error.__init__(self, "Version Control System error: %s" % msg)
+        Error.__init__(self, "Version Control System error:\n%s" % msg)
 
 
 class GlobNotFoundError(Error):
