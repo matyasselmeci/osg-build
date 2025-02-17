@@ -3,7 +3,7 @@ import logging
 import re
 import os
 import errno
-from urllib.parse import urlsplit  # Python 3
+from urllib.parse import urlsplit
 
 
 from .constants import GIT_RESTRICTED_BRANCHES, KOJI_RESTRICTED_TARGETS
@@ -14,6 +14,19 @@ from . import constants
 
 
 _log = logging.getLogger(__name__)
+
+
+def git_cmd(top_dir, *args):
+    # type: (str, *str) -> list
+    """A list of params for doing a git command in a specific repo directory"""
+    return ["git", "-C", top_dir] + list(args)
+
+
+def run_git_cmd(top_dir, *args):
+    # type: (str, *str) -> tuple[str, int]
+    """Run a git command and return its stdout+stderr, and exit code"""
+    command = git_cmd(top_dir, *args)
+    return utils.sbacktick(command, err2out=True)
 
 
 def is_git(package_dir):
@@ -166,8 +179,7 @@ def restricted_branch_matches_target(branch, target):
 def get_branch(package_dir):
     """Return the current git branch for a given directory."""
     top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "branch"]
-    out, err = utils.sbacktick(command, err2out=True)
+    out, err = run_git_cmd(top_dir, "branch")
     if err:
         raise VCSError("Exit code %d getting git branch for directory %s.  Output:\n%s" % (err, package_dir, out))
     out = out.strip()
@@ -186,8 +198,7 @@ def get_known_remote(package_dir):
        as a (name, normalized url) tuple.
        """
     top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "remote", "-v"]
-    out, err = utils.sbacktick(command, err2out=True)
+    out, err = run_git_cmd(top_dir, "remote", "-v")
     if err:
         raise VCSError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
     for line in out.splitlines():
@@ -207,8 +218,7 @@ def get_fetch_url(package_dir, remote):
     """Return a fetch url
        is on osg-build's configured whitelist of remotes."""
     top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "remote", "-v"]
-    out, err = utils.sbacktick(command, err2out=True)
+    out, err = run_git_cmd(top_dir, "remote", "-v")
     if err:
         raise VCSError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
     for line in out.splitlines():
@@ -231,9 +241,7 @@ def get_current_branch_remote(package_dir):
     branch = get_branch(package_dir)
 
     top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"),
-               "config", "branch.%s.remote" % branch]
-    out, err = utils.sbacktick(command, err2out=True)
+    out, err = run_git_cmd(top_dir, "config", f"branch.{branch}.remote")
     if err:
         raise VCSError("Exit code %d getting git branch %s remote for directory '%s'. Output:\n%s" % \
                        (err, branch, package_dir, out))
@@ -244,8 +252,7 @@ def get_current_branch_remote(package_dir):
 def is_uncommitted(package_dir):
     """Return True if there are uncommitted changes or files in the git working dir."""
     top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "status", "--porcelain"]
-    out, err = utils.sbacktick(command, err2out=True)
+    out, err = run_git_cmd(top_dir, "status", "--porcelain")
     if err:
         raise VCSError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
     if out:
@@ -260,8 +267,7 @@ def is_uncommitted(package_dir):
     branch_ref = "refs/heads/%s" % branch
     origin_ref = "refs/remotes/%s/%s" % (remote, branch)
 
-    command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "show-ref"]
-    out, err = utils.sbacktick(command, err2out=True)
+    out, err = run_git_cmd(top_dir, "show-ref")
     if err:
         raise VCSError("Exit code %d getting git references for directory %s.  Output:\n%s" % (err, package_dir, out))
     branch_hash = ''
@@ -296,8 +302,7 @@ def is_outdated(package_dir):
     branch_hash = ''
 
     top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "show-ref"]
-    out, err = utils.sbacktick(command, err2out=True)
+    out, err = run_git_cmd(top_dir, "show-ref")
     if err:
         raise VCSError("Exit code %d getting git references for directory %s.  Output:\n%s" % (err, package_dir, out))
     for line in out.splitlines():
@@ -310,8 +315,8 @@ def is_outdated(package_dir):
     if not branch_hash:
         raise VCSError("Unable to determine local branch's hash.")
 
-    out, err = utils.sbacktick(["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"),
-                                "ls-remote", "--heads", remote])
+    command = git_cmd(top_dir, "ls-remote", "--heads", remote)
+    out, err = utils.sbacktick(command)
     if err:
         raise VCSError("Exit code %d getting remote git status for directory %s. Output:\n%s" % (err, package_dir, out))
 
@@ -358,16 +363,13 @@ def verify_package_dir(package_dir):
     at least an osg/ dir or an upstream/ dir) and is in a git repo.
     """
     top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"),
-               "rev-parse", "--show-toplevel"]
-    out, err = utils.sbacktick(command, err2out=True)
+    out, err = run_git_cmd(top_dir, "rev-parse", "--show-toplevel")
     if err:
         raise VCSError("Exit code %d getting git top-level directory of %s. Output:\n%s" % (err, package_dir, out))
     if top_dir != out.strip():
         raise VCSError("Specified package directory (%s) is not a top-level directory in the git repo (%s)." % \
                        (package_dir, top_dir))
-    command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "ls-files", "osg", "upstream"]
-    out, err = utils.sbacktick(command, err2out=True)
+    out, err = run_git_cmd(top_dir, "ls-files", "osg", "upstream")
     if err:
         raise VCSError("Exit code %d getting git subdirectories of %s. Output:\n%s" % (err, package_dir, out))
     for line in out.split("\n"):
@@ -379,8 +381,7 @@ def verify_package_dir(package_dir):
 def verify_git_svn_commit(package_dir):
     """Verify the last commit in the git repo actually came from git-svn."""
     top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "log", "-n", "1"]
-    out, err = utils.sbacktick(command, err2out=True)
+    out, err = run_git_cmd(top_dir, "log", "-n", "1")
     if err:
         raise VCSError("Exit code %d getting git log for directory %s. Output:\n%s" % (err, package_dir, out))
 
@@ -493,9 +494,7 @@ def koji(package_dir, koji_obj, buildopts):
         remote = get_fetch_url(package_dir, get_known_remote(package_dir)[0])
 
         top_dir = os.path.split(os.path.abspath(package_dir))[0]
-        command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"),
-                   "log", "-1", "--pretty=format:%H"]
-        out, err = utils.sbacktick(command, err2out=True)
+        out, err = run_git_cmd(top_dir, "log", "-1", "--pretty=format:%H")
         if err:
             raise VCSError("Exit code %d getting git hash for directory %s. Output:\n%s" % (err, package_dir, out))
         rev = out.strip()
