@@ -243,6 +243,8 @@ def get_package_info(package_dir):
         label, value = line.strip().split(": ", 1)
         label = label.strip().lower().replace(' ', '_')
         info[label] = value
+    # 'canon_url' is the https URL of the package directory (in case the
+    # local repository is checked out via a file:/// URL.
     info['canon_url'] = re.sub("^" + re.escape(info['repository_root']), SVN_ROOT, info['url'])
     return info
 

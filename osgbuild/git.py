@@ -215,6 +215,7 @@ def get_fetch_url(package_dir, remote):
         dir_remote_url = _normalize_remote(info[1])
         if dir_remote_name == remote:
             return constants.GIT_REMOTE_MAPS.setdefault(dir_remote_url, dir_remote_url)
+            # ^^ mutates a constant, sigh
 
     raise VCSError("Remote URL not found for remote %s in directory %s; are remotes " \
         "configured correctly?" % (remote, package_dir))
