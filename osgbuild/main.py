@@ -58,6 +58,14 @@ def koji_main(buildopts, package_dirs):
     # Verify package dirs
     #
 
+    # First check that the directories share a prefix, so you can't try to build
+    # 23-main/foo and 24-main/foo at the same time.
+    abs_pkg_dirs = [pkg if utils.is_url(pkg) else os.path.abspath(pkg) for pkg in package_dirs]
+    prefixes = {pkg.rpartition("/")[0] for pkg in abs_pkg_dirs}
+    if len(prefixes) != 1:
+        log.error("Multiple prefixes found: %s", prefixes)
+        raise Error("Package directories must share a directory prefix")
+
     for pkg in package_dirs:
         if buildopts['want_vcs']:
             # verify working dirs
