@@ -4,7 +4,7 @@ import os
 import errno
 
 from .constants import SVN_ROOT, SVN_REDHAT_PATH, SVN_RESTRICTED_BRANCHES, KOJI_RESTRICTED_TARGETS
-from .error import Error, SVNError, UsageError
+from .error import Error, VCSError, UsageError
 from . import utils
 
 
@@ -44,7 +44,7 @@ def is_uncommitted(package_dir):
         return False
     out, err = utils.sbacktick("svn status -q " + package_dir, err2out=True)
     if err:
-        raise SVNError("Exit code %d getting SVN status. Output:\n%s" % (err, out))
+        raise VCSError("Exit code %d getting SVN status. Output:\n%s" % (err, out))
     if out:
         print("The following uncommitted changes exist:")
         print(out)
@@ -62,7 +62,7 @@ def is_outdated(package_dir):
         return False
     out, err = utils.sbacktick("svn status -u -q " + package_dir)
     if err:
-        raise SVNError("Exit code %d getting SVN status. Output:\n%s" % (err, out))
+        raise VCSError("Exit code %d getting SVN status. Output:\n%s" % (err, out))
     outdated_files = []
     for line in out.split("\n"):
         try:
@@ -109,7 +109,7 @@ def verify_package_info(package_info):
     command = ["svn", "ls", url, "-r", rev]
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise SVNError("Exit code %d getting SVN listing of %s (rev %s). Output:\n%s" % (err, url, rev, out))
+        raise VCSError("Exit code %d getting SVN listing of %s (rev %s). Output:\n%s" % (err, url, rev, out))
     for line in out.split("\n"):
         if line.startswith('osg/') or line.startswith('upstream/'):
             return True
@@ -205,9 +205,9 @@ def verify_correct_branch(package_dir, buildopts):
     url = package_info['canon_url']
     # Check for old, deprecated branches
     if SVN_REDHAT_PATH + '/trunk/' in url:
-        raise SVNError("trunk has been removed; use branches/osg-3.5 instead")
+        raise VCSError("trunk has been removed; use branches/osg-3.5 instead")
     elif SVN_REDHAT_PATH + '/branches/upcoming/' in url:
-        raise SVNError("unversioned upcoming has been removed; use branches/3.5-upcoming instead")
+        raise VCSError("unversioned upcoming has been removed; use branches/3.5-upcoming instead")
     branch_match = re.search(SVN_REDHAT_PATH + r'/(branches/[^/]+)/', url)
     if not branch_match:
         # Building from a weird path (such as a tag). Be permissive -- koji
@@ -223,7 +223,7 @@ def verify_correct_branch(package_dir, buildopts):
             # Some custom target -- any branch ok
             continue
         if not restricted_branch_matches_target(branch, target):
-            raise SVNError("Forbidden to build from %s branch into %s target" % (branch, target))
+            raise VCSError("Forbidden to build from %s branch into %s target" % (branch, target))
 
 
 def get_package_info(package_dir):
@@ -237,7 +237,7 @@ def get_package_info(package_dir):
 
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise SVNError("Exit code %d getting SVN info. Output:\n%s" % (err, out))
+        raise VCSError("Exit code %d getting SVN info. Output:\n%s" % (err, out))
     info = dict()
     for line in out.split("\n"):
         label, value = line.strip().split(": ", 1)

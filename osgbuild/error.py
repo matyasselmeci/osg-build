@@ -35,16 +35,10 @@ class ConfigErrors(Error):
         return repr((self.msg, self.errors))
 
 
-class SVNError(Error):
-    """Error doing SVN actions"""
+class VCSError(Error):
+    """Errors related to version control systems"""
     def __init__(self, msg):
-        Error.__init__(self, "SVN error: %s" % msg)
-
-
-class GitError(Error):
-    """Error doing Git actions"""
-    def __init__(self, msg):
-        Error.__init__(self, "Git error: %s" % msg)
+        Error.__init__(self, "Version Control System error:\n%s" % msg)
 
 
 class GlobNotFoundError(Error):

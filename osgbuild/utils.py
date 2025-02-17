@@ -624,3 +624,15 @@ def split_nvr(build):
         return match.group('name'), match.group('version'), match.group('release')
     else:
         return '', '', ''
+
+
+def get_dver_from_string(s):
+    """Get the EL major version from a string containing it.
+    Return None if not found."""
+    if not s:
+        return None
+    match = re.search(r'\b(el\d+)\b', s)
+    if match is not None:
+        return match.group(1)
+    else:
+        return None

@@ -39,30 +39,30 @@ SVN_REDHAT_PATH = "/native/redhat"
 
 # fmt: off
 SVN_RESTRICTED_BRANCHES = {
-    r'^branches/(?P<osgver>[0-9.]+)-upcoming$': 'upcoming',
-    r'^branches/osg-internal$'             : 'oldinternal',
-    r'^branches/devops$'                   : 'devops',
-    r'^branches/osg-(?P<osgver>\d+\.\d+)$' : 'versioned',
-    r'^branches/(?P<osgver>[0-9.]+)-main$' : 'versioned',
-    r'^branches/(?P<osgver>[0-9.]+)-internal$' : 'internal',
+    r'^branches/(?P<osgver>[0-9.]+)-upcoming$'  : 'upcoming',
+    r'^branches/osg-internal$'                  : 'oldinternal',
+    r'^branches/devops$'                        : 'devops',
+    r'^branches/osg-(?P<osgver>\d+\.\d+)$'      : 'versioned',
+    r'^branches/(?P<osgver>[0-9.]+)-main$'      : 'versioned',
+    r'^branches/(?P<osgver>[0-9.]+)-internal$'  : 'internal',
 }
 KOJI_RESTRICTED_TARGETS = {
-    r'^osg-(el\d+)$'                       : 'main',
-    r'^osg-(?P<osgver>[0-9.]+)-upcoming-(el\d+)$': 'upcoming',
-    r'^devops-(el\d+)$'                    : 'devops',
-    r'^osg-(el\d+)-internal$'              : 'oldinternal',
-    r'^osg-(?P<osgver>\d+\.\d+)-(el\d+)$'  : 'versioned',
-    r'^(?P<osgver>[0-9.]+)-main-(el\d+)$'  : 'versioned',
-    r'^(?P<osgver>[0-9.]+)-internal-(el\d+)$' : 'internal',
-    r'^chtc-(el\d+)$'                      : 'chtc',
+    r'^osg-(el\d+)$'                                : 'main',
+    r'^osg-(?P<osgver>[0-9.]+)-upcoming-(el\d+)$'   : 'upcoming',
+    r'^devops-(el\d+)$'                             : 'devops',
+    r'^osg-(el\d+)-internal$'                       : 'oldinternal',
+    r'^osg-(?P<osgver>\d+\.\d+)-(el\d+)$'           : 'versioned',
+    r'^osg-(?P<osgver>[0-9.]+)-main-(el\d+)$'       : 'versioned',
+    r'^osg-(?P<osgver>[0-9.]+)-internal-(el\d+)$'   : 'internal',
+    r'^chtc-(el\d+)$'                               : 'chtc',
 }
 GIT_RESTRICTED_BRANCHES = {
-    r'^(\w*/)?(?P<osgver>[0-9.]+)-upcoming$': 'upcoming',
-    r'^(\w*/)?internal$'                   : 'oldinternal',
-    r'^(\w*/)?devops$'                     : 'devops',
-    r'^(\w*/)?osg-(?P<osgver>\d+\.\d+)$'   : 'versioned',
-    r'^(\w*/)?(?P<osgver>[0-9.]+)-main$'   : 'versioned',
-    r'^(\w*/)?(?P<osgver>[0-9.]+)-internal$' : 'internal',
+    r'^(\w*/)?(?P<osgver>[0-9.]+)-upcoming$'    : 'upcoming',
+    r'^(\w*/)?internal$'                        : 'oldinternal',
+    r'^(\w*/)?devops$'                          : 'devops',
+    r'^(\w*/)?osg-(?P<osgver>\d+\.\d+)$'        : 'versioned',
+    r'^(\w*/)?(?P<osgver>[0-9.]+)-main$'        : 'versioned',
+    r'^(\w*/)?(?P<osgver>[0-9.]+)-internal$'    : 'internal',
 }
 # fmt: on
 
@@ -85,7 +85,6 @@ GIT_REMOTE_MAPS = {HCC_AUTH_REMOTE: HCC_REMOTE,
                    CHTC_AUTH_REMOTE: CHTC_REMOTE}
 
 DEFAULT_BUILDOPTS_COMMON = {
-    'autoclean': True,
     'background': False,
     'cache_prefix': 'AUTO',
     'dry_run': False,
@@ -99,7 +98,6 @@ DEFAULT_BUILDOPTS_COMMON = {
     'regen_repos': False,
     'repo': 'osg',
     'scratch': False,
-    'vcs': None,
     'target_arch': None,
     'working_directory': '.',
 }

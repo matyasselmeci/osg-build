@@ -6,7 +6,7 @@ from urllib.parse import urlsplit  # Python 3
 
 
 from .constants import GIT_RESTRICTED_BRANCHES, KOJI_RESTRICTED_TARGETS
-from .error import Error, GitError
+from .error import Error, VCSError
 from . import utils
 from . import constants
 
@@ -163,14 +163,14 @@ def get_branch(package_dir):
     command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "branch"]
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise GitError("Exit code %d getting git branch for directory %s.  Output:\n%s" % (err, package_dir, out))
+        raise VCSError("Exit code %d getting git branch for directory %s.  Output:\n%s" % (err, package_dir, out))
     out = out.strip()
     if not out:
-        raise GitError("'git branch' returned no output.")
+        raise VCSError("'git branch' returned no output.")
 
     branch = [ line[2:] for line in out.splitlines() if line.startswith('* ') ]
     if len(branch) != 1 or not branch[0] or ' ' in branch[0]:
-        raise GitError("'git branch' indicates no branch is checked out")
+        raise VCSError("'git branch' indicates no branch is checked out")
     return branch[0]
 
 
@@ -183,7 +183,7 @@ def get_known_remote(package_dir):
     command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "remote", "-v"]
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise GitError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
+        raise VCSError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
     for line in out.splitlines():
         info = line.strip().split()
         if len(info) != 3:
@@ -194,7 +194,7 @@ def get_known_remote(package_dir):
         remote_url = _normalize_remote(info[1])
         if remote_url in constants.KNOWN_GIT_REMOTES:
             return remote_name, remote_url
-    raise GitError("Known remote not found for directory %s; are remotes configurated correctly?" % package_dir)
+    raise VCSError("Known remote not found for directory %s; are remotes configurated correctly?" % package_dir)
 
 
 def get_fetch_url(package_dir, remote):
@@ -204,7 +204,7 @@ def get_fetch_url(package_dir, remote):
     command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "remote", "-v"]
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise GitError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
+        raise VCSError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
     for line in out.splitlines():
         info = line.strip().split()
         if len(info) != 3:
@@ -216,7 +216,7 @@ def get_fetch_url(package_dir, remote):
         if dir_remote_name == remote:
             return constants.GIT_REMOTE_MAPS.setdefault(dir_remote_url, dir_remote_url)
 
-    raise GitError("Remote URL not found for remote %s in directory %s; are remotes " \
+    raise VCSError("Remote URL not found for remote %s in directory %s; are remotes " \
         "configured correctly?" % (remote, package_dir))
 
 def get_current_branch_remote(package_dir):
@@ -228,7 +228,7 @@ def get_current_branch_remote(package_dir):
                "config", "branch.%s.remote" % branch]
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise GitError("Exit code %d getting git branch %s remote for directory '%s'. Output:\n%s" % \
+        raise VCSError("Exit code %d getting git branch %s remote for directory '%s'. Output:\n%s" % \
                        (err, branch, package_dir, out))
 
     return out.strip()
@@ -240,7 +240,7 @@ def is_uncommitted(package_dir):
     command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "status", "--porcelain"]
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise GitError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
+        raise VCSError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
     if out:
         print("The following uncommitted changes exist:")
         print(out)
@@ -256,7 +256,7 @@ def is_uncommitted(package_dir):
     command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "show-ref"]
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise GitError("Exit code %d getting git references for directory %s.  Output:\n%s" % (err, package_dir, out))
+        raise VCSError("Exit code %d getting git references for directory %s.  Output:\n%s" % (err, package_dir, out))
     branch_hash = ''
     origin_hash = ''
     for line in out.splitlines():
@@ -269,11 +269,11 @@ def is_uncommitted(package_dir):
             origin_hash = info[0]
 
     if not branch_hash and not origin_hash:
-        raise GitError("Could not find either local or remote hash for directory %s." % package_dir)
+        raise VCSError("Could not find either local or remote hash for directory %s." % package_dir)
     if branch_hash != origin_hash:
-        raise GitError("Local hash (%s) does not match remote hash "
+        raise VCSError("Local hash (%s) does not match remote hash "
             "(%s) for directory %s.  Perhaps you need to perform 'git push'?" % \
-            (branch_hash, origin_hash, package_dir))
+                       (branch_hash, origin_hash, package_dir))
 
     return False
 
@@ -292,7 +292,7 @@ def is_outdated(package_dir):
     command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "show-ref"]
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise GitError("Exit code %d getting git references for directory %s.  Output:\n%s" % (err, package_dir, out))
+        raise VCSError("Exit code %d getting git references for directory %s.  Output:\n%s" % (err, package_dir, out))
     for line in out.splitlines():
         info = line.strip().split()
         if len(info) != 2:
@@ -301,12 +301,12 @@ def is_outdated(package_dir):
             branch_hash = info[0]
             break
     if not branch_hash:
-        raise GitError("Unable to determine local branch's hash.")
+        raise VCSError("Unable to determine local branch's hash.")
 
     out, err = utils.sbacktick(["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"),
                                 "ls-remote", "--heads", remote])
     if err:
-        raise GitError("Exit code %d getting remote git status for directory %s. Output:\n%s" % (err, package_dir, out))
+        raise VCSError("Exit code %d getting remote git status for directory %s. Output:\n%s" % (err, package_dir, out))
 
     remote_hash = ''
     for line in out.splitlines():
@@ -317,7 +317,7 @@ def is_outdated(package_dir):
             remote_hash = info[0]
             break
     if not remote_hash:
-        raise GitError("Unable to determine remote branch's hash.")
+        raise VCSError("Unable to determine remote branch's hash.")
 
     if remote_hash == branch_hash:
         return False
@@ -355,14 +355,14 @@ def verify_package_dir(package_dir):
                "rev-parse", "--show-toplevel"]
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise GitError("Exit code %d getting git top-level directory of %s. Output:\n%s" % (err, package_dir, out))
+        raise VCSError("Exit code %d getting git top-level directory of %s. Output:\n%s" % (err, package_dir, out))
     if top_dir != out.strip():
-        raise GitError("Specified package directory (%s) is not a top-level directory in the git repo (%s)." % \
+        raise VCSError("Specified package directory (%s) is not a top-level directory in the git repo (%s)." % \
                        (package_dir, top_dir))
     command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "ls-files", "osg", "upstream"]
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise GitError("Exit code %d getting git subdirectories of %s. Output:\n%s" % (err, package_dir, out))
+        raise VCSError("Exit code %d getting git subdirectories of %s. Output:\n%s" % (err, package_dir, out))
     for line in out.split("\n"):
         if line.startswith('osg/') or line.startswith('upstream/'):
             return True
@@ -375,13 +375,13 @@ def verify_git_svn_commit(package_dir):
     command = ["git", "--work-tree", top_dir, "--git-dir", os.path.join(top_dir, ".git"), "log", "-n", "1"]
     out, err = utils.sbacktick(command, err2out=True)
     if err:
-        raise GitError("Exit code %d getting git log for directory %s. Output:\n%s" % (err, package_dir, out))
+        raise VCSError("Exit code %d getting git log for directory %s. Output:\n%s" % (err, package_dir, out))
 
     for line in out.splitlines():
         if line.find("git-svn-id:") >= 0:
             return
 
-    raise GitError("Last git commit not from SVN - possible inconsistency between git and SVN!")
+    raise VCSError("Last git commit not from SVN - possible inconsistency between git and SVN!")
 
 
 def verify_correct_remote(package_dir):
@@ -389,7 +389,7 @@ def verify_correct_remote(package_dir):
     remote = get_current_branch_remote(package_dir)
     known_remote = get_known_remote(package_dir)[0]
     if remote != known_remote:
-        raise GitError("Remote %s for directory %s is not an officially known remote." % (remote, package_dir))
+        raise VCSError("Remote %s for directory %s is not an officially known remote." % (remote, package_dir))
 
 
 def verify_correct_branch(package_dir, buildopts):
@@ -400,7 +400,7 @@ def verify_correct_branch(package_dir, buildopts):
         # a git url -- we can only do some of our checks
         remote, _, branch = parse_git_url(package_dir)
         if not remote:
-            raise GitError("URL %s failed to parse as a git URL" % package_dir)
+            raise VCSError("URL %s failed to parse as a git URL" % package_dir)
     else:
         branch = get_branch(package_dir)
         remote = get_known_remote(package_dir)[1]
@@ -424,7 +424,7 @@ def verify_correct_branch(package_dir, buildopts):
             # Some custom target -- any branch ok
             continue
         if not restricted_branch_matches_target(branch, target):
-            raise GitError("Forbidden to build from %s branch into %s target" % (branch, target))
+            raise VCSError("Forbidden to build from %s branch into %s target" % (branch, target))
 
 
 def _do_target_remote_checks_hcc(remote, branch):
@@ -487,7 +487,7 @@ def koji(package_dir, koji_obj, buildopts):
                    "log", "-1", "--pretty=format:%H"]
         out, err = utils.sbacktick(command, err2out=True)
         if err:
-            raise GitError("Exit code %d getting git hash for directory %s. Output:\n%s" % (err, package_dir, out))
+            raise VCSError("Exit code %d getting git hash for directory %s. Output:\n%s" % (err, package_dir, out))
         rev = out.strip()
 
     if not re.match(r"\w+", package_name): # sanity check

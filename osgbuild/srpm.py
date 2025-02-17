@@ -59,16 +59,15 @@ class SRPMBuild(object):
     # end of __init__()
 
 
-    def maybe_autoclean(self):
-        """Delete underscore directories if the autoclean option is set."""
-        if self.buildopts['autoclean']:
-            for udir in [self.results_dir,
-                         self.prebuild_dir,
-                         self.unpacked_dir,
-                         self.unpacked_tarball_dir]:
-                if os.path.exists(udir):
-                    log.debug("autoclean removing " + udir)
-                    shutil.rmtree(udir)
+    def clean_previous(self):
+        """Delete underscore directories."""
+        for udir in [self.results_dir,
+                     self.prebuild_dir,
+                     self.unpacked_dir,
+                     self.unpacked_tarball_dir]:
+            if os.path.exists(udir):
+                log.debug("clean_previous removing " + udir)
+                shutil.rmtree(udir)
 
 
     def get_rpmbuild_defines(self, prebuild):
@@ -183,10 +182,9 @@ class SRPMBuild(object):
         if not utils.which("quilt"):
             raise ProgramNotFoundError("quilt")
 
-        if self.buildopts['autoclean']:
-            if os.path.exists(self.quilt_dir):
-                log.debug("autoclean removing " + self.quilt_dir)
-                shutil.rmtree(self.quilt_dir)
+        if os.path.exists(self.quilt_dir):
+            log.debug("removing previous" + self.quilt_dir)
+            shutil.rmtree(self.quilt_dir)
 
         utils.safe_makedirs(self.quilt_dir)
         spec_filename = self.prebuild_external_sources(destdir=self.quilt_dir)
