@@ -190,7 +190,7 @@ def watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir):
         if buildopts["no_wait"]:
             print()
             print("To watch tasks, run:")
-            print("osg-koji watch-tasks %s" % " ".join(task_ids))
+            print("osg-koji watch-tasks %s" % " ".join(str(tid) for tid in task_ids))
             print()
     kojiinter.KojiInter.backend.watch_tasks_with_retry(task_ids)
     if buildopts['getfiles']:
