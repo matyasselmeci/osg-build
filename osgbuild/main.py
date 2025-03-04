@@ -192,11 +192,12 @@ def watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir):
             print("To watch tasks, run:")
             print("osg-koji watch-tasks %s" % " ".join(str(tid) for tid in task_ids))
             print()
-    kojiinter.KojiInter.backend.watch_tasks_with_retry(task_ids)
-    if buildopts['getfiles']:
-        for destdir, tids in task_ids_by_results_dir.items():
-            if kojiinter.KojiInter.backend.download_results(tids, destdir):
-                log.info("Results and logs downloaded to %s", destdir)
+        else:
+            kojiinter.KojiInter.backend.watch_tasks_with_retry(task_ids)
+            if buildopts['getfiles']:
+                for destdir, tids in task_ids_by_results_dir.items():
+                    if kojiinter.KojiInter.backend.download_results(tids, destdir):
+                        log.info("Results and logs downloaded to %s", destdir)
 
 
 def is_pkg_dir(pkg):
