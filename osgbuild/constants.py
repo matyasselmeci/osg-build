@@ -34,8 +34,6 @@ try:
     DATA_FILE_SEARCH_PATH.append(str(_importlib_resources.files("osgbuild.data")))
 except (ImportError, AttributeError):
     pass
-SVN_ROOT = "https://vdt.cs.wisc.edu/svn"
-SVN_REDHAT_PATH = "/native/redhat"
 
 # fmt: off
 SVN_RESTRICTED_BRANCHES = {

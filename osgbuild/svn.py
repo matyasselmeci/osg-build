@@ -4,11 +4,13 @@ import re
 import os
 import errno
 
-from .constants import SVN_ROOT, SVN_REDHAT_PATH, SVN_RESTRICTED_BRANCHES, KOJI_RESTRICTED_TARGETS
+from .constants import SVN_RESTRICTED_BRANCHES, KOJI_RESTRICTED_TARGETS
 from .error import Error, VCSError, UsageError
 from . import utils
 
 
+SVN_ROOT = "https://vdt.cs.wisc.edu/svn"
+SVN_REDHAT_PATH = "/native/redhat"
 
 _log = logging.getLogger(__name__)
 

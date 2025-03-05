@@ -6,7 +6,7 @@ import sys
 import tempfile
 from os.path import join as opj
 
-from osgbuild import constants as C
+import svn
 
 from typing import List, Optional
 
@@ -53,7 +53,7 @@ def svn_export(path, rev, destpath):
     """Run svn export on a revision rev of path into destpath"""
     try:
         checked_backtick(
-            ["svn", "export", opj(C.SVN_ROOT, path) + "@" + rev, "-r", rev, destpath],
+            ["svn", "export", opj(svn.SVN_ROOT, path) + "@" + rev, "-r", rev, destpath],
             err2out=True)
     except CalledProcessError as err:
         errprintf("Error in svn export:\n%s", err.output)

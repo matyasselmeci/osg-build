@@ -7,6 +7,7 @@ import unittest
 from unittest import TestCase
 
 import osgbuild.constants as C
+import svn
 from osgbuild import main
 from osgbuild.test.common import OSG_23_MAIN, OSG_36, common_setUp, backtick_osg_build, regex_in_list, checked_osg_build
 from osgbuild.utils import CalledProcessError, errprintf
@@ -67,7 +68,7 @@ class TestKoji(TestCase):
 
     def test_verify_correct_branch_svn(self):
         try:
-            _ = backtick_osg_build(self.kdr_lib + ["--repo", "3.6-upcoming", "--dry-run", opj(C.SVN_ROOT, OSG_23_MAIN, "osg-xrootd")])
+            _ = backtick_osg_build(self.kdr_lib + ["--repo", "3.6-upcoming", "--dry-run", opj(svn.SVN_ROOT, OSG_23_MAIN, "osg-xrootd")])
         except CalledProcessError as err:
             out_list = err.output.split("\n")
             self.assertTrue(
