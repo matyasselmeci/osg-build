@@ -81,8 +81,17 @@ def koji_main(buildopts, package_dirs):
                     log.error("VCS build requested but no usable VCS (SVN or Git) found for %s", pkg)
                     raise
 
-            if not buildopts['scratch']:
+            try:
                 vcs_module.verify_correct_branch(pkg, buildopts)
+            except VCSError as err:
+                if buildopts['scratch']:
+                    log.warning("\nVCS error for %s: %s\n", pkg, err, exc_info=False)
+                    log.debug("Traceback: %s", traceback.format_exc())
+                    if os.isatty(sys.stdin) and utils.ask_yn("Abort?"):
+                        raise
+                else:
+                    raise
+
         else:
             is_pkg_dir(pkg)
 
