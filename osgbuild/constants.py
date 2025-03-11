@@ -131,7 +131,6 @@ DEFAULT_DVERS_BY_REPO = {
     '24-main': ['el8', 'el9'],
     '24-upcoming': ['el8', 'el9'],
     '24-internal': ['el8', 'el9'],
-    'internal': ['el7'],
     'devops': ['el7', 'el8', 'el9'],
     'chtc': ['el9'],
 }
@@ -143,8 +142,6 @@ for _ds in DEFAULT_DVERS_BY_REPO.values():
         assert _d in DVERS
 
 REPO_HINTS_STATIC = {
-    'osg': {'target': 'osg-%(dver)s', 'tag': 'osg-%(dver)s'},
-    'internal': {'target': 'osg-%(dver)s-internal', 'tag': 'osg-%(dver)s'},
     'devops': {'target': 'devops-%(dver)s', 'tag': 'osg-%(dver)s'},
     'hcc': {'target': 'hcc-%(dver)s', 'tag': 'hcc-%(dver)s'},
     'chtc': {'target': 'chtc-%(dver)s', 'tag': 'chtc-%(dver)s'},
