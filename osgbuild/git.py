@@ -265,7 +265,7 @@ def is_uncommitted(package_dir):
 
     branch = get_branch(package_dir)
     branch_ref = "refs/heads/%s" % branch
-    origin_ref = "refs/remotes/%s/%s" % (remote, branch)
+    origin_ref_pat = re.compile(r"refs/(urls|remotes)/%s/%s" % (re.escape(remote), re.escape(branch)))
 
     out, err = run_git_cmd(top_dir, "show-ref")
     if err:
@@ -278,7 +278,7 @@ def is_uncommitted(package_dir):
             continue
         if info[1] == branch_ref:
             branch_hash = info[0]
-        if info[1] == origin_ref:
+        if origin_ref_pat.fullmatch(info[1]):
             origin_hash = info[0]
 
     if not branch_hash and not origin_hash:
