@@ -483,9 +483,13 @@ class KojiLibInter(object):
                 setattr(self, var, os.path.expanduser(items[var]))
 
 
-    def init_koji_session(self, login=True):
+    # TODO: Add a way to call init_koji_session with debug_xmlrpc=True
+    def init_koji_session(self, login=True, debug_xmlrpc=False):
         log.info("Initializing koji session to %s", self.server)
-        self.kojisession = kojilib.ClientSession(self.server, {})
+        opts = {}
+        if debug_xmlrpc:
+            opts["debug_xmlrpc"] = True
+        self.kojisession = kojilib.ClientSession(self.server, opts)
         if login and not self.dry_run:
             self.login_to_koji()
 
