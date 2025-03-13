@@ -540,6 +540,10 @@ class KojiLibInter(object):
         kwargs recognized: priority, background, arch_override
 
         """
+        if not url:
+            raise ValueError("url not specified")
+        if not target:
+            raise ValueError("target not specified")
         opts = { 'scratch': scratch }
         arch_override = kwargs.get('arch_override', None)
         if arch_override:
