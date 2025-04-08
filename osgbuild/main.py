@@ -72,7 +72,7 @@ def koji_main(buildopts, package_dirs):
             # vcs_module is the module for accessing the repo
             vcs_module = svn if svn.is_svn(pkg) else git if git.is_git(pkg) else None
             if not vcs_module:
-                raise VCSError("VCS build requested but could not determine VCS (SVN or Git) for %s", pkg)
+                raise VCSError("VCS build requested but could not determine VCS (SVN or Git) for %s" % pkg)
 
             if not utils.is_url(pkg):
                 try:
