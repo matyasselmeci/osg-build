@@ -1,4 +1,5 @@
 """Helper functions for an SVN build."""
+import logging
 import re
 import os
 import errno
@@ -6,6 +7,10 @@ import errno
 from .constants import SVN_ROOT, SVN_REDHAT_PATH, SVN_RESTRICTED_BRANCHES, KOJI_RESTRICTED_TARGETS
 from .error import Error, VCSError, UsageError
 from . import utils
+
+
+
+_log = logging.getLogger(__name__)
 
 
 def is_svn(package_dir):
@@ -219,6 +224,9 @@ def verify_correct_branch(package_dir, buildopts):
         return
     for dver in buildopts['enabled_dvers']:
         target = buildopts['targetopts_by_dver'][dver]['koji_target']
+        if not target:
+            _log.debug(f"No koji target for {dver} -- skipping VCS check")
+            continue
         if not is_restricted_target(target):
             # Some custom target -- any branch ok
             continue

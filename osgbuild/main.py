@@ -110,6 +110,11 @@ def koji_main(buildopts, package_dirs):
             dver_buildopts.setdefault('koji_target', target_for_repo_hint(buildopts['repo'], build_dver))
             dver_buildopts.setdefault('koji_tag', target_for_repo_hint(buildopts['repo'], build_dver))
 
+            if not dver_buildopts['koji_target']:
+                raise UsageError("No koji target specified for %s on %s; you may need to specify --repo" % (pkg, build_dver))
+            if not dver_buildopts['koji_tag']:
+                raise UsageError("No koji tag specified for %s on %s; you may need to specify --repo" % (pkg, build_dver))
+
             koji_obj = kojiinter.KojiInter(dver_buildopts)
 
             if buildopts['want_vcs']:

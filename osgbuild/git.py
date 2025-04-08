@@ -1,4 +1,5 @@
 """Helper functions for a git build."""
+import logging
 import re
 import os
 import errno
@@ -9,6 +10,11 @@ from .constants import GIT_RESTRICTED_BRANCHES, KOJI_RESTRICTED_TARGETS
 from .error import Error, VCSError
 from . import utils
 from . import constants
+
+
+
+_log = logging.getLogger(__name__)
+
 
 def is_git(package_dir):
     """Determine whether a given directory is part of a git repo."""
@@ -420,6 +426,9 @@ def verify_correct_branch(package_dir, buildopts):
         return
     for dver in buildopts['enabled_dvers']:
         target = buildopts['targetopts_by_dver'][dver]['koji_target']
+        if not target:
+            _log.debug(f"No koji target for {dver} -- skipping VCS check")
+            continue
         _do_target_remote_checks(target, remote, branch)
         if not is_restricted_target(target):
             # Some custom target -- any branch ok
