@@ -79,8 +79,9 @@ class OSGPrebuildError(Error):
 
 class UsageError(Error):
     """Error raised when invalid arguments are passed"""
-    def __init__(self, msg, tb=None):
+    def __init__(self, msg, long_usage=False, tb=None):
         Error.__init__(self, "Usage error: " + msg + "\n", tb)
+        self.long_usage = long_usage
 
 
 class KojiError(Error):

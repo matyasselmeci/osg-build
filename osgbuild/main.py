@@ -653,7 +653,7 @@ def get_task(args):
 
     """
     if len(args) < 1:
-        raise UsageError('Need task!')
+        raise UsageError('Need task!', long_usage=True)
     task = args[0]
 
     valid_tasks = ['koji', 'lint', 'mock', 'prebuild', 'prepare', 'quilt', 'rpmbuild']
@@ -663,7 +663,7 @@ def get_task(args):
     if len(matching_tasks) > 1:
         raise UsageError('Ambiguous task. Matching tasks are:' + ", ".join(matching_tasks))
     elif not matching_tasks:
-        raise UsageError('No valid task')
+        raise UsageError('No valid task', long_usage=True)
     else:
         real_task = matching_tasks[0]
 
@@ -819,39 +819,42 @@ def guess_pkg_dir(start_dir):
 
 def entrypoint():
     """CLI entrypoint for osg-build"""
+    prog = os.path.basename(sys.argv[0])
     try:
         return main(sys.argv)
     except UsageError as err:
         print(str(err), file=sys.stderr)
-        print("""\
-    Type %(prog)s --help for usage info.
-    
+        print(f"""\
+    Type {prog} --help for usage info.
+""", file=sys.stderr)
+        if err.long_usage:
+            print(f"""\
     Common usage patterns follow:
     
     To extract and patch the sources without building:
-        %(prog)s prepare PACKAGE1 <PACKAGE2..n>
+        {prog} prepare PACKAGE1 <PACKAGE2..n>
     
     To look for potential errors in package(s):
-        %(prog)s lint PACKAGE1 <PACKAGE2..n>
+        {prog} lint PACKAGE1 <PACKAGE2..n>
     
     To build on the local machine:
-        %(prog)s rpmbuild PACKAGE1 <PACKAGE2..n>
+        {prog} rpmbuild PACKAGE1 <PACKAGE2..n>
             OR
-        %(prog)s mock PACKAGE1 <PACKAGE2..n>
+        {prog} mock PACKAGE1 <PACKAGE2..n>
     
     To submit test build(s):
-        %(prog)s koji --scratch PACKAGE1 <PACKAGE2..n>
+        {prog} koji --scratch PACKAGE1 <PACKAGE2..n>
     
     To submit final build(s):
-        %(prog)s koji PACKAGE1 <PACKAGE2..n>
+        {prog} koji PACKAGE1 <PACKAGE2..n>
     
-    To submit build(s) for EL7 or EL8 only:
-        %(prog)s koji --el7 PACKAGE1 <PACKAGE2..n>
-        %(prog)s koji --el8 PACKAGE1 <PACKAGE2..n>
+    To submit build(s) for EL8 or EL9 only:
+        {prog} koji --el8 PACKAGE1 <PACKAGE2..n>
+        {prog} koji --el9 PACKAGE1 <PACKAGE2..n>
     
     Also see the documentation at:
-        https://opensciencegrid.github.io/technology/software/osg-build-tools/
-    """ % {'prog': os.path.basename(sys.argv[0])}, file=sys.stderr)
+        https://osg-htc.org/technology/software/osg-build-tools/
+""", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
         print("", file=sys.stderr)
