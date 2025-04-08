@@ -107,12 +107,13 @@ def koji_main(buildopts, package_dirs):
         for build_dver in buildopts['enabled_dvers']:
             dver_buildopts = buildopts.copy()  # type: dict
             dver_buildopts.update(buildopts['targetopts_by_dver'][build_dver])
-            dver_buildopts.setdefault('koji_target', target_for_repo_hint(buildopts['repo'], build_dver))
-            dver_buildopts.setdefault('koji_tag', target_for_repo_hint(buildopts['repo'], build_dver))
+            if buildopts.get("repo"):
+                dver_buildopts.setdefault('koji_target', target_for_repo_hint(buildopts['repo'], build_dver))
+                dver_buildopts.setdefault('koji_tag', target_for_repo_hint(buildopts['repo'], build_dver))
 
-            if not dver_buildopts['koji_target']:
+            if not dver_buildopts.get("koji_target"):
                 raise UsageError("No koji target specified for %s on %s; you may need to specify --repo" % (pkg, build_dver))
-            if not dver_buildopts['koji_tag']:
+            if not dver_buildopts.get("koji_tag"):
                 raise UsageError("No koji tag specified for %s on %s; you may need to specify --repo" % (pkg, build_dver))
 
             koji_obj = kojiinter.KojiInter(dver_buildopts)
@@ -160,7 +161,7 @@ def main(argv=None):
         for build_dver in buildopts['enabled_dvers']:
             dver_buildopts = buildopts.copy()
             dver_buildopts.update(buildopts['targetopts_by_dver'][build_dver])
-            if task == "mock" and kojiinter:
+            if task == "mock" and kojiinter and buildopts.get("repo"):
                 dver_buildopts.setdefault('koji_target', target_for_repo_hint(buildopts['repo'], build_dver))
                 dver_buildopts.setdefault('koji_tag', target_for_repo_hint(buildopts['repo'], build_dver))
 

@@ -96,7 +96,7 @@ DEFAULT_BUILDOPTS_COMMON = {
     'mock_config_from_koji': None,
     'no_wait': False,
     'regen_repos': False,
-    'repo': 'osg',
+    'repo': None,
     'scratch': False,
     'target_arch': None,
     'working_directory': '.',
