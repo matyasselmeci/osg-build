@@ -835,7 +835,7 @@ def _get_route_dvers_pairs(routenames, valid_routes, extra_dvers, no_dvers, only
 
         if only_dver:
             if only_dver in route.dvers or only_dver in route.extra_dvers:
-                route_dvers_pairs.append((route, set([only_dver])))
+                route_dvers_pairs.append((route, {only_dver}))
             else:
                 printf("The dver %s is not available for route %s.", only_dver, routename)
                 _print_route_dvers(routename, route)

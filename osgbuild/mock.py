@@ -7,10 +7,8 @@ import grp
 import os
 import re
 import shutil
-import string
 import tempfile
 
-from .constants import *
 from .error import MockError, OSGBuildError
 from . import utils
 

@@ -1,7 +1,7 @@
 """Exception classes for osg-build"""
 # pylint: disable=C0103,C0111
-import os
-import traceback
+import os as _os
+import traceback as _traceback
 
 
 class Error(Exception):
@@ -10,7 +10,7 @@ class Error(Exception):
         Exception.__init__(self)
         self.msg = msg
         if tb is None:
-            self.traceback = traceback.format_exc()
+            self.traceback = _traceback.format_exc()
 
     def __repr__(self):
         return repr((self.msg, self.traceback))
@@ -51,7 +51,7 @@ class GlobNotFoundError(Error):
 class FileNotFoundInSearchPathError(Error):
     """Error raised when a required file wasn't found in the search path."""
     def __init__(self, fname, searchpath):
-        msg = "Couldn't find file named '%s' in search path %s." % (fname, os.pathsep.join(searchpath))
+        msg = "Couldn't find file named '%s' in search path %s." % (fname, _os.pathsep.join(searchpath))
         Error.__init__(self, msg)
 
 
@@ -60,7 +60,7 @@ class ProgramNotFoundError(Error):
     def __init__(self, program):
         msg = "Couldn't find required program '%s'." % program
         if "/" not in program:
-            Error.__init__(self, msg + " $PATH was:\n%s" % os.environ['PATH'])
+            Error.__init__(self, msg + " $PATH was:\n%s" % _os.environ['PATH'])
         else:
             Error.__init__(self, msg)
 

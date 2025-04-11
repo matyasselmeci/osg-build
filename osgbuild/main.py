@@ -4,6 +4,7 @@
 import logging
 import traceback
 from optparse import OptionGroup, OptionParser, OptionValueError
+import os
 import re
 import sys
 import tempfile

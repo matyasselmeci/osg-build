@@ -1,5 +1,5 @@
 """Global constants for osg-build"""
-import os
+import _os
 
 WD_RESULTS = '_build_results'
 WD_PREBUILD = '_final_srpm_contents'
@@ -10,9 +10,9 @@ AFS_CACHE_PATH = '/p/vdt/public/html/upstream'
 AFS_CACHE_PREFIX = 'file://' + AFS_CACHE_PATH
 WEB_CACHE_PREFIX = 'https://vdt.cs.wisc.edu/upstream'
 
-KOJI_USER_CONFIG_DIR = os.path.expanduser("~/.koji")
-OSG_KOJI_USER_CONFIG_DIR = os.path.expanduser("~/.osg-koji")
-KOJI_CLIENT_CERT = os.path.join(OSG_KOJI_USER_CONFIG_DIR, "client.crt")
+KOJI_USER_CONFIG_DIR = _os.path.expanduser("~/.koji")
+OSG_KOJI_USER_CONFIG_DIR = _os.path.expanduser("~/.osg-koji")
+KOJI_CLIENT_CERT = _os.path.join(OSG_KOJI_USER_CONFIG_DIR, "client.crt")
 
 DATA_DIR = "/usr/share/osg-build"
 PROMOTER_INI = 'promoter.ini'
@@ -22,9 +22,9 @@ DEFAULT_AUTHTYPE = "kerberos"
 KOJI_HUB = "https://koji.osg-htc.org"
 KOJI_WEB = "https://koji.osg-htc.org"
 
-DATA_FILE_SEARCH_PATH = [os.path.abspath(os.path.dirname(__file__) + "/../data")]
-if "OSG_LOCATION" in os.environ:
-    DATA_FILE_SEARCH_PATH.append(os.environ["OSG_LOCATION"] + DATA_DIR)
+DATA_FILE_SEARCH_PATH = [_os.path.abspath(_os.path.dirname(__file__) + "/../data")]
+if "OSG_LOCATION" in _os.environ:
+    DATA_FILE_SEARCH_PATH.append(_os.environ["OSG_LOCATION"] + DATA_DIR)
 DATA_FILE_SEARCH_PATH.append(DATA_DIR)
 try:
     try:
