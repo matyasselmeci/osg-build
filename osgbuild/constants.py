@@ -28,10 +28,10 @@ if "OSG_LOCATION" in _os.environ:
 DATA_FILE_SEARCH_PATH.append(DATA_DIR)
 try:
     try:
-        import importlib_resources
+        import importlib_resources as _importlib_resources
     except ImportError:
-        import importlib.resources as importlib_resources
-    DATA_FILE_SEARCH_PATH.append(str(importlib_resources.files("osgbuild.data")))
+        import importlib.resources as _importlib_resources
+    DATA_FILE_SEARCH_PATH.append(str(_importlib_resources.files("osgbuild.data")))
 except (ImportError, AttributeError):
     pass
 SVN_ROOT = "https://vdt.cs.wisc.edu/svn"
