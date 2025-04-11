@@ -1,5 +1,5 @@
 """Global constants for osg-build"""
-import _os
+import os as _os
 
 WD_RESULTS = '_build_results'
 WD_PREBUILD = '_final_srpm_contents'
