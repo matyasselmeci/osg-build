@@ -386,21 +386,6 @@ class KojiShellInter(object):
         log.debug('Watching tasks not implemented in Shell backend')
 
 
-
-if HAVE_KOJILIB:
-    # HACK
-    # Create an object that has an instance variable named poll_interval.
-    # kojicli.watch_tasks() expects a global variable named options with
-    # an attribute poll_interval to determine how often to poll the server
-    # for a status update.
-    # TODO This doesn't seem to be true by Koji 1.33 so this hack can be removed;
-    #      poll_interval is now an argument to watch_tasks()
-    class _KojiCliOptions(object): # pylint: disable=C0111,R0903
-        def __init__(self, poll_interval):
-            self.poll_interval = poll_interval
-    kojicli.options = _KojiCliOptions(5)
-
-
 def koji_error_wrap(description):
     """Decorator to wrap the body of a function in a try/except clause which
     catches kojilib.GenericError and raises a KojiError with a more
@@ -650,7 +635,7 @@ class KojiLibInter(object):
 
     @koji_error_wrap('watching tasks')
     def watch_tasks(self, tasks):
-        return kojicli.watch_tasks(self.kojisession, tasks)
+        return kojicli.watch_tasks(self.kojisession, tasks, poll_interval=15)
 
 
     @koji_error_wrap('watching tasks')
@@ -658,7 +643,7 @@ class KojiLibInter(object):
         tries = 0
         while True:
             try:
-                return kojicli.watch_tasks(self.kojisession, tasks)
+                return kojicli.watch_tasks(self.kojisession, tasks, poll_interval=15)
             except kojilib.ServerOffline as err:
                 # these have a large chance of being bogus
                 log.info("Got error from server: %s", err)
