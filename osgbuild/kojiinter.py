@@ -2,6 +2,7 @@
 # pylint: disable=W0614,C0103
 
 import configparser
+import functools
 import json
 import logging
 import os
@@ -28,27 +29,19 @@ try:
 except (ImportError, AttributeError):
     HAVE_KOJILIB = False
 
-# TODO: replace with @functools.lru_cache() once we drop Python 2
 
-__koji_config_file = None
-__koji_config = None
-
-
+@functools.lru_cache()
 def get_koji_config_file():
     # type: () -> str
     """Return the path to the koji config file; raise KojiError if no such file exists."""
-    global __koji_config_file
-
-    if not __koji_config_file:
-        config_file = (utils.find_file("config", [OSG_KOJI_USER_CONFIG_DIR,
-                                                  KOJI_USER_CONFIG_DIR]))
-        if not config_file:
-            raise KojiError("Can't find Koji config file")
-        __koji_config_file = config_file
-
-    return __koji_config_file
+    config_file = (utils.find_file("config", [OSG_KOJI_USER_CONFIG_DIR,
+                                              KOJI_USER_CONFIG_DIR]))
+    if not config_file:
+        raise KojiError("Can't find Koji config file")
+    return config_file
 
 
+@functools.lru_cache()
 def get_koji_config(config_file=None):
     # type: (Optional[str]) -> configparser.ConfigParser
     """Parse and return a koji config file, validating that it has some of the
@@ -57,21 +50,16 @@ def get_koji_config(config_file=None):
     config_file: a path to the koji config file or None (in which case the default path will be used)
 
     """
-    global __koji_config
-
-    if not __koji_config:
-        config = configparser.ConfigParser()
-        if not config_file:
-            config_file = get_koji_config_file()
-        config.read(config_file)
-        if not config.has_section("koji"):
-            raise KojiError("Koji config file %s is missing a 'koji' section" % config_file)
-        for opt in "server", "weburl", "topurl":  # TODO: "authtype" should also be required once we move to kerberos
-            if not config.has_option("koji", opt):
-                raise KojiError("Koji config file %s is missing the '%s' option" % (config_file, opt))
-        __koji_config = config
-
-    return __koji_config
+    config = configparser.ConfigParser()
+    if not config_file:
+        config_file = get_koji_config_file()
+    config.read(config_file)
+    if not config.has_section("koji"):
+        raise KojiError("Koji config file %s is missing a 'koji' section" % config_file)
+    for opt in "server", "weburl", "topurl":  # TODO: "authtype" should also be required once we move to kerberos
+        if not config.has_option("koji", opt):
+            raise KojiError("Koji config file %s is missing the '%s' option" % (config_file, opt))
+    return config
 
 
 def get_koji_cmd():
@@ -435,7 +423,7 @@ class KojiLibInter(object):
 
         self.ca = None
         self.cert = KOJI_CLIENT_CERT
-        self.kojisession = None
+        self.kojisession: kojilib.ClientSession = None
         self.server = os.path.join(KOJI_HUB, "kojihub")
         self.serverca = None
         self.user = None
@@ -619,7 +607,7 @@ class KojiLibInter(object):
 
     def get_build_and_dest_tags(self, target):
         """Return the build and destination tags for target."""
-        info = self.kojisession.getBuildTargets(target) # TESTME
+        info = sorted(self.kojisession.getBuildTargets(target))  # TESTME
         if not info:
             raise KojiError("Couldn't get info for target %s" % target)
         return (info[0]['build_tag_name'], info[0]['dest_tag_name'])
