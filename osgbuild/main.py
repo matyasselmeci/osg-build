@@ -479,7 +479,7 @@ rpmbuild     Build using rpmbuild(8) on the local machine
             help="Do not invoke koji, only show what would be done")
         koji_group.add_option(
             "--getfiles", "--get-files", action="store_true", dest="getfiles",
-            help="Download finished products and logfiles")
+            help="Download finished products and logfiles (scratch builds only)")
         koji_group.add_option(
             "--koji-backend", dest="koji_backend",
             help="The back end to use for invoking koji. Valid values are: "
@@ -534,7 +534,7 @@ rpmbuild     Build using rpmbuild(8) on the local machine
             "--no-scratch", "--noscratch", action="store_false", dest="scratch",
             help="Do not perform a scratch build (default)")
         koji_group.add_option(
-            "--vcs", "--svn", action="store_true", dest="want_vcs",
+            "--vcs", "--svn", "--git", action="store_true", dest="want_vcs",
             help="Build package directly from SVN/Git (always true for non-scratch builds)"
         )
         koji_group.add_option(
