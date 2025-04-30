@@ -1,6 +1,7 @@
 """osg build script"""
 
 
+import functools
 import logging
 import traceback
 from optparse import OptionGroup, OptionParser, OptionValueError
@@ -8,6 +9,8 @@ import os
 import re
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 import configparser
 
 from .constants import *
@@ -52,6 +55,8 @@ def koji_main(buildopts, package_dirs):
     """
     if not kojiinter:
         raise KojiError("Koji module is not available")
+
+    require_minimum_version()
 
     vcs_module = None
 
@@ -816,6 +821,49 @@ def guess_pkg_dir(start_dir):
             continue
 
     return guess_dir
+
+
+@functools.lru_cache()
+def osg_ini() -> configparser.ConfigParser:
+    """
+    Returns the parsed osg.ini file from the koji hub
+
+    Returns:
+        The parsed configuration.  This may be empty if the download failed.
+    """
+    config = configparser.ConfigParser()
+    uri = f"{KOJI_HUB}/mnt/koji/osg.ini"
+    handle = urllib.request.urlopen(uri)
+    try:
+        data = handle.read()
+        config.read_string(data.decode("latin-1"))
+    except (urllib.error.URLError, ValueError) as e:
+        log.warning(f"Failed to download and parse osg.ini from {uri}: {e}")
+    return config
+
+
+def require_minimum_version(strict=False):
+    """
+    Raise an error if our version of osg-build is too low to interact with the koji hub.
+    If strict is False, then do not raise an error if we do not know what the minimum version is
+    (due to not being able to download osg.ini).
+    """
+    try:
+        minimum_version = osg_ini()["osg-build"]["minimum_version"].strip()
+        minimum_version_list = [x.rjust(3, "0") for x in minimum_version.split(".")]
+    except (TypeError, KeyError, ValueError):
+        if strict:
+            raise Error("Could not download osg.ini to perform minimum version check")
+        else:
+            log.warning("Could not download osg.ini; skipping minimum version check")
+            return
+    our_version_list = [x.rjust(3, "0") for x in __version__.split(".")]
+    if our_version_list < minimum_version_list:
+        raise Error(
+            "The version of osg-build you are using (%s) is too old for using\n"
+            "OSG Koji.  Please upgrade osg-build to at least version %s."
+            % (__version__, minimum_version)
+        )
 
 
 def entrypoint():
