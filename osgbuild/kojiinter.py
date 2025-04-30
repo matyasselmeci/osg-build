@@ -95,15 +95,21 @@ def download_koji_file(task_id, filename, destdir):
         desthandle.write(handle.read())
 
 
-def chop_package_el_suffix(package):
+def chop_package_suffix(package):
     # type: (str) -> str
     """If the package directory has the el version(s) at the end, e.g.
     condor.el9, buildsys-macros.el8, foobar.el7.el8
-    chop them off. This gives us the "base" package name for adding to the
+    chop them off.
+
+    Also, if the package directory has `__` followed by some text at the end,
+    such as `xrootd__variant`, chop that off too.
+
+    This gives us the "base" package name for adding to the
     Koji tag.
     """
     el_pattern = re.compile(r"([.]el\d+)+$")
-    real_package = el_pattern.sub("", package)
+    dunder_pattern = re.compile(r"__\S+$")
+    real_package = dunder_pattern.sub("", el_pattern.sub("", package))
     return real_package
 
 
@@ -232,7 +238,7 @@ class KojiShellInter(object):
             owner = self.user
         if not self.dry_run and not owner:
             raise KojiError("Cannot add package without an owner")
-        real_package = chop_package_el_suffix(package)
+        real_package = chop_package_suffix(package)
         found = False
         list_pkgs = utils.backtick(self.koji_cmd + ["list-pkgs", "--package", real_package])
         for line in list_pkgs.split("\n"):
@@ -498,7 +504,7 @@ class KojiLibInter(object):
         tag_obj = self.kojisession.getTag(tag)
         if not tag_obj:
             raise KojiError("Invalid tag %s" % tag)
-        real_package = chop_package_el_suffix(package)
+        real_package = chop_package_suffix(package)
         try:
             package_list = self.kojisession.listPackages(tagID=tag_obj['id'], pkgID=real_package)
         except kojilib.GenericError: # koji raises this if the package doesn't exist
