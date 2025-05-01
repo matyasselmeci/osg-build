@@ -418,7 +418,7 @@ rpmbuild     Build using rpmbuild(8) on the local machine
         dest="redhat_release",
         type="string",
         help="The version of the distribution to build the package for. "
-        "Valid values are: 7 or 8 (for EL 7 or 8 respectively). "
+        "This should be a number (8, 9, etc.). "
         "Default: build for all releases (koji task) current platform "
         "(other tasks)")
     parser.add_option(
