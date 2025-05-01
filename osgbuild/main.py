@@ -833,10 +833,10 @@ def osg_ini() -> configparser.ConfigParser:
     """
     config = configparser.ConfigParser()
     uri = f"{KOJI_HUB}/mnt/koji/osg.ini"
-    handle = urllib.request.urlopen(uri)
     try:
-        data = handle.read()
-        config.read_string(data.decode("latin-1"))
+        with urllib.request.urlopen(uri) as handle:
+            data = handle.read()
+            config.read_string(data.decode("latin-1"))
     except (urllib.error.URLError, ValueError) as e:
         log.warning(f"Failed to download and parse osg.ini from {uri}: {e}")
     return config
