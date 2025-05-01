@@ -89,6 +89,23 @@ FetchOptions = collections.namedtuple('FetchOptions',
     ['destdir', 'cache_prefix', 'nocheck', 'want_spec']
 )
 
+
+class CouldNotDownload(Error):
+    """Raised when we could not download the file from the remote server."""
+
+
+class CouldNotSave(Error):
+    """Raised when we could not save the downloaded file to the local disk."""
+
+
+class SourceLineError(Error):
+    """Raised when there is a syntax or usage error in the .source line."""
+
+
+class ChecksumMismatch(Error):
+    """Raised when the checksum of a downloaded file does not match the expected value."""
+
+
 # fetch handlers are defined like:
 #
 #   fetch_xyz_source(
@@ -101,8 +118,25 @@ FetchOptions = collections.namedtuple('FetchOptions',
 
 
 def fetch_cached_source(relpath, sha1sum=None, ops=None):
-    uri = os.path.join(ops.cache_prefix, relpath)
-    return fetch_uri_source(uri, sha1sum, ops=ops)
+    if ops.cache_prefix is not None:
+        # cache_prefix explicitly specified, download from there
+        uri = os.path.join(ops.cache_prefix, relpath)
+        return fetch_uri_source(uri, sha1sum, ops=ops)
+    else:
+        # cache prefix not specified -- try the primary, then fall back to the backup
+        primary_uri = os.path.join(C.WEB_CACHE_PREFIX, relpath)
+        backup_uri = os.path.join(C.BACKUP_WEB_CACHE_PREFIX, relpath)
+        try:
+            return fetch_uri_source(primary_uri, sha1sum, ops=ops)
+        except CouldNotDownload as err:
+            # Couldn't download -- 404?  We can try the backup URI.
+            # (If we could download but not save, finding another source wouldn't help)
+            log.warning(
+                "Could not download from primary cache URI %s; trying backup %s. "
+                "Error was: %s",
+                primary_uri, backup_uri, err
+            )
+            return fetch_uri_source(backup_uri, sha1sum, ops=ops)
 
 
 def fetch_uri_source(uri, sha1sum=None, ops=None, filename=None):
@@ -125,7 +159,7 @@ def download_uri(uri, outfile):
     try:
         handle = urllib.request.urlopen(uri)
     except urllib.error.URLError as err:
-        raise Error("Unable to download %s\n%s" % (uri, err))
+        raise CouldNotDownload("Unable to download %s\n%s" % (uri, err))
 
     sha = hashlib.sha1()
     try:
@@ -134,7 +168,7 @@ def download_uri(uri, outfile):
                 desthandle.write(chunk)
                 sha.update(chunk)
     except EnvironmentError as e:
-        raise Error("Unable to save downloaded file to %s\n%s" % (outfile, e))
+        raise CouldNotSave("Unable to save downloaded file to %s\n%s" % (outfile, e))
     return sha.hexdigest()
 
 
@@ -153,12 +187,12 @@ def check_file_checksum(path, sha1sum, got_sha1sum, nocheck):
         if nocheck:
             log.warning(msg + "\n    (ignored)")
         else:
-            raise Error(msg)
+            raise ChecksumMismatch(msg)
 
 
 def _required(item, key):
     if item is None:
-        raise Error("No '%s' specified" % key)
+        raise SourceLineError("No '%s' specified" % key)
 
 
 def _almost_required(item, key):
@@ -170,7 +204,7 @@ def _almost_required(item, key):
 def _mk_prefix(name, tag, tarball):
     if tarball:
         if not tarball.endswith('.tar.gz'):
-            raise Error("tarball must end with .tar.gz: '%s'" % tarball)
+            raise SourceLineError("tarball must end with .tar.gz: '%s'" % tarball)
         prefix = tarball[:-len('.tar.gz')]
     else:
         tag = os.path.basename(tag)
@@ -184,7 +218,7 @@ def _mk_prefix(name, tag, tarball):
 def fetch_github_source(repo, tag, hash=None, ops=None, **kw):
     m = re.match(r"([^\s/]+)/([^\s/]+?)(?:.git)?$", repo)
     if not m:
-        raise Error("'repo' syntax for type=github must be owner/project")
+        raise SourceLineError("'repo' syntax for type=github must be owner/project")
     url = "https://github.com/" + repo
     return fetch_git_source(url, tag, hash, ops=ops, **kw)
 
@@ -253,7 +287,7 @@ def git_archive_remote_ref(
             checked_call2(['git', 'clone', '--branch', tag, url, '.'])
     except CalledProcessError as e:
         log.error("Failed to retrieve tag '%s' from repo '%s'" % (tag, url))
-        raise Error(e)
+        raise CouldNotDownload(e)
 
     got_sha = utils.checked_backtick(['git', 'rev-parse', 'HEAD'])
     if hash or not ops.nocheck:
@@ -308,7 +342,7 @@ def check_git_hash(url, tag, sha, got_sha, nocheck):
         if nocheck:
             log.warning(msg + "\n    (ignored)")
         else:
-            raise Error(msg)
+            raise ChecksumMismatch(msg)
 
 
 def deref_git_sha(sha):
@@ -340,15 +374,16 @@ def process_source_line(line, ops):
         except TypeError as e:
             fancy_source_error(meta_type, explicit_type, handler, args, kv, e)
     else:
-        raise Error("Unrecognized type '%s' (valid types are: %s)"
-                    % (meta_type, sorted(handlers)))
+        raise SourceLineError(
+            "Unrecognized type '%s' (valid types are: %s)" % (meta_type, sorted(handlers))
+        )
 
 
 def get_auto_source_type(*args, **kw):
     if not args:
-        raise Error("No type specified and no default arg provided")
+        raise SourceLineError("No type specified and no default arg provided")
     if args[0].endswith('.git'):
-        raise Error("No automatic types allowed for git sources")
+        raise SourceLineError("No automatic types allowed for git sources")
     if re.search(r'^\w+://', args[0]) or args[0].startswith('/'):
         return 'uri'
     else:
@@ -410,7 +445,7 @@ def fancy_source_error(meta_type, explicit_type, handler, args, kw, e):
         log.error("Provided too many positional arguments: %s" % ' '.join(args))
     else:
         log.error(e)
-    raise Error("Invalid parameters for %s=%s source line" % (xtype,meta_type))
+    raise SourceLineError("Invalid parameters for %s=%s source line" % (xtype,meta_type))
 
 
 def process_dot_source(cache_prefix, sfilename, destdir, nocheck, want_spec):
@@ -481,7 +516,7 @@ def copy_with_filter(files_list, destdir):
 
 def fetch(package_dir,
           destdir=None,
-          cache_prefix=C.WEB_CACHE_PREFIX,
+          cache_prefix=None,
           unpacked_dir=None,
           want_full_extract=False,
           unpacked_tarball_dir=None,
