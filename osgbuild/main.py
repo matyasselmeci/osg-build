@@ -399,10 +399,8 @@ rpmbuild     Build using rpmbuild(8) on the local machine
     parser = OptionParser(header)
     parser.add_option(
         "-c", "--cache-prefix",
-        help="The prefix for the software cache to take source files from. "
-        "The following special caches exist: "
-        "AFS (%s), VDT (%s), and AUTO (AFS if avaliable, VDT if not). "
-        "Default: AUTO" % (AFS_CACHE_PREFIX, WEB_CACHE_PREFIX))
+        help="The prefix for the software cache to take source files from."
+    )
     for dver in DVERS:
         rhel = int(dver[2:])
         parser.add_option(
@@ -706,16 +704,10 @@ def get_buildopts(options, task):
         buildopts['working_directory'] = (tempfile.mkdtemp(prefix='osg-build-'))
         log.debug('Working directory is %s', buildopts['working_directory'])
 
-    # Special case for cache_prefix being AFS or VDT
-    if buildopts['cache_prefix'].upper() == 'AFS':
-        buildopts['cache_prefix'] = AFS_CACHE_PREFIX
-    elif buildopts['cache_prefix'].upper() == 'VDT':
-        buildopts['cache_prefix'] = WEB_CACHE_PREFIX
-    elif buildopts['cache_prefix'].upper() == 'AUTO':
-        if os.path.exists(AFS_CACHE_PATH):
-            buildopts['cache_prefix'] = AFS_CACHE_PREFIX
-        else:
-            buildopts['cache_prefix'] = WEB_CACHE_PREFIX
+    # Always use the web cache (primary or backup) unless otherwise specified.
+    # Backward compat for old special values:
+    if str(buildopts['cache_prefix']).upper() in {'AFS', 'VDT', 'AUTO', "NONE"}:
+        buildopts['cache_prefix'] = None
 
     # If nothing has set targetopts_by_dver, set it here
     if not buildopts.get('targetopts_by_dver', None):

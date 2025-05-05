@@ -6,9 +6,8 @@ WD_PREBUILD = '_final_srpm_contents'
 WD_UNPACKED = '_upstream_srpm_contents'
 WD_UNPACKED_TARBALL = '_upstream_tarball_contents'
 WD_QUILT = '_quilt'
-AFS_CACHE_PATH = '/p/vdt/public/html/upstream'
-AFS_CACHE_PREFIX = 'file://' + AFS_CACHE_PATH
-WEB_CACHE_PREFIX = 'https://vdt.cs.wisc.edu/upstream'
+BACKUP_WEB_CACHE_PREFIX = 'https://vdt.cs.wisc.edu/upstream'
+WEB_CACHE_PREFIX = 'https://sw-upstream.svc.osg-htc.org/upstream'
 
 KOJI_USER_CONFIG_DIR = _os.path.expanduser("~/.koji")
 OSG_KOJI_USER_CONFIG_DIR = _os.path.expanduser("~/.osg-koji")
@@ -84,7 +83,7 @@ GIT_REMOTE_MAPS = {HCC_AUTH_REMOTE: HCC_REMOTE,
 
 DEFAULT_BUILDOPTS_COMMON = {
     'background': False,
-    'cache_prefix': 'AUTO',
+    'cache_prefix': None,
     'dry_run': False,
     'full_extract': False,
     'getfiles': False,

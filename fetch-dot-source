@@ -7,7 +7,7 @@ import os
 
 from osgbuild.main          import log, log_consolehandler
 from osgbuild.error         import Error
-from osgbuild.fetch_sources import C, process_dot_source
+from osgbuild.fetch_sources import process_dot_source
 
 def usage(exit):
     print("Usage: {script} [-d destdir] [options] upstream.source [...]\n\n"
@@ -27,7 +27,7 @@ def setloglevel(level):
     log_consolehandler.setLevel(level)
 
 options = dict(
-    cache_prefix = C.WEB_CACHE_PREFIX,
+    cache_prefix = None,
     destdir = '.',
     nocheck = False,
     want_spec = False
@@ -46,7 +46,7 @@ for op,val in ops:
     elif op == '-s': options['want_spec'] = True
     elif op == '-d': options['destdir'] = val
     elif op == '-c': options['cache_prefix'] = val
-    elif op == '-a': options['cache_prefix'] = C.AFS_CACHE_PREFIX
+    elif op == '-a': raise Error("AFS cache prefix (-a) not supported anymore")
     elif op == '-v': setloglevel(logging.DEBUG)
     elif op == '-q': setloglevel(logging.WARNING)
     elif op == '-h': usage(0)
