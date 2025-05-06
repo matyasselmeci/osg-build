@@ -2,7 +2,6 @@
 import logging
 import re
 import os
-import errno
 
 from .constants import SVN_RESTRICTED_BRANCHES, KOJI_RESTRICTED_TARGETS
 from .error import Error, VCSError, UsageError
@@ -24,25 +23,20 @@ def is_svn(package_dir):
         if "git" in scheme:
             return False
         return True
-    pwd = os.getcwd()
     try:
-        try:
-            os.chdir(package_dir)
-        except OSError as ose:
-            if ose.errno == errno.ENOENT:
-                raise Error("%s is not a valid package directory\n(%s)" % (package_dir, ose))
-        command = ["svn", "info"]
-        try:
-            err = utils.sbacktick(command, err2out=True)[1]
-        except OSError as ose:
-            if ose.errno != errno.ENOENT:
-                raise
-            err = 1
-        if err:
-            return False
-    finally:
-        os.chdir(pwd)
-    return True
+        with utils.chdir(package_dir):
+            command = ["svn", "info"]
+            try:
+                err = utils.sbacktick(command, err2out=True)[1]
+            except FileNotFoundError:
+                _log.debug("'svn' command not found, assuming not SVN")
+                return False
+            if err == 0:
+                return True
+            else:
+                return False
+    except (FileNotFoundError, NotADirectoryError) as err:
+        raise VCSError("%s is not a valid package directory\n(%s)" % (package_dir, err))
 
 
 def is_uncommitted(package_dir):
@@ -273,5 +267,3 @@ def koji(package_dir, koji_obj, buildopts):
         koji_obj.add_pkg(package_name)
     return koji_obj.build_svn(package_info['canon_url'],
                               package_info['revision'])
-
-
