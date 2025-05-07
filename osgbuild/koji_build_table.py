@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Build a table in JIRA syntax for the latest builds of the given packages
+in a tag.  Useful if you need a new copy of the table that osg-promote
+generates.
+
+"""
+import re
+import subprocess
+import sys
+from optparse import OptionParser
+from subprocess import PIPE, Popen
+
+
+from osgbuild.constants import KOJI_WEB
+
+
+def get_args(argv):
+    usage = """\
+Usage; %prog [-f tag|build] <tag> <packages>...
+    OR %prog [-f tag|build] -t <tag1> [-t <tag2>]... <packages>..."""
+
+    parser = OptionParser(usage, prog=argv[0])
+    parser.add_option(
+        "-t",
+        "--tag",
+        dest="tags",
+        action="append",
+        help="Tag to get build(s) for.  May include commas or be specified multiple times.",
+    )
+    parser.add_option(
+        "-f",
+        "--format",
+        dest="tblformat",
+        default="build",
+        type="choice",
+        choices=["tag", "build"],
+        help="Table format: either 'tag' (tag in first column and sorted by tag)"
+        " or 'build' (build in first column and sorted by build)",
+    )
+
+    options, args = parser.parse_args(argv[1:])
+
+    try:
+        if not options.tags:
+            tags = [args.pop(0)]
+        else:
+            tags = options.tags
+        realtags = []
+        for t in tags:
+            realtags.extend(t.split(","))
+        return options.tblformat, realtags, args
+    except IndexError:
+        parser.error("Incorrect number of arguments")
+
+
+def get_latest_build(tag, package):
+    """Get the latest build NVR for a package in the given tag, or None on failure"""
+    proc = Popen(
+        ["osg-koji", "-q", "list-tagged", "--latest", tag, package], stdout=PIPE
+    )
+    out = proc.communicate()[0] or b""
+    ret = proc.returncode
+
+    latest_build_line = out.decode("latin-1").strip()
+
+    if ret != 0 or not latest_build_line:
+        return
+
+    return latest_build_line.split()[0]
+
+
+def get_build_line(latest_build):
+    """Get the line containing the build ID from `koji buildinfo` output"""
+    proc = Popen(["osg-koji", "buildinfo", latest_build], stdout=PIPE)
+    build_line = proc.stdout.readline().decode("latin-1").strip()
+    ret = proc.wait()
+    if ret != 0 or not build_line:
+        return
+    return build_line
+
+
+def get_build_id(build_line):
+    """Get the build ID from the line containing it from `koji buildinfo`"""
+    match = re.search(r"\[(\d+)\]", build_line)
+    if match:
+        return match.group(1)
+
+
+def build_table(tag_package_table, header, divider, formatstr):
+    lines = [header]
+    errors = []
+    if divider:
+        lines.append(divider)
+    for tag, package in tag_package_table:
+        latest_build = get_latest_build(tag, package)
+        if not latest_build:
+            errors.append(
+                "Error getting latest build for tag %s, package %s" % (tag, package)
+            )
+            continue
+        build_line = get_build_line(latest_build)
+        if not build_line:
+            errors.append("Error getting build info for %s" % latest_build)
+            continue
+        build_id = get_build_id(build_line)
+        if not build_id:
+            errors.append(
+                "Error getting build ID for %s; text returned was:\n%s"
+                % (latest_build, build_line)
+            )
+            continue
+        build_url = KOJI_WEB + "/koji/buildinfo?buildID=" + build_id
+        lines.append(formatstr % locals())
+    return lines, errors
+
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+
+    tblformat, tags, packages = get_args(argv)
+
+    org_lines = []
+    new_lines = []
+    errors = []
+
+    tag_package_table = [[tag, package] for tag in tags for package in packages]
+
+    org_divider = "|---+---|"
+    new_divider = "--- | ---"
+    if tblformat == "tag":
+        tag_package_table.sort(key=lambda pair: pair[0])
+        org_header = "| *Tag* | *Build* |"
+        org_formatstr = "| %(tag)s | [[%(build_url)s][%(latest_build)s]] |"
+        new_header = "**Tag** | **Build**"
+        new_formatstr = " %(tag)s | [%(latest_build)s](%(build_url)s)"
+    elif tblformat == "build":
+        tag_package_table.sort(key=lambda pair: pair[1])
+        org_header = "| *Build* | *Tag* |"
+        org_formatstr = "| [[%(build_url)s][%(latest_build)s]] | %(tag)s |"
+        new_header = "**Build** | **Tag**"
+        new_formatstr = " [%(latest_build)s](%(build_url)s) | %(tag)s"
+    else:
+        assert False, "shouldn't get here"
+
+    org_lines, errors = build_table(
+        tag_package_table, org_header, org_divider, org_formatstr
+    )
+    new_lines, _ = build_table(
+        tag_package_table, new_header, new_divider, new_formatstr
+    )
+
+    ret = 0
+    if errors:
+        ret = 1
+        print("\n".join(errors), file=sys.stderr)
+
+    if org_lines:
+        print(" ************* org-mode syntax *************")
+        print("\n".join(org_lines))
+        print("\n")
+    if new_lines:
+        print(" ************* New JIRA syntax *************")
+        print("\n".join(new_lines))
+        print("\n")
+
+    return ret
+
+
+if __name__ == "__main__":
+    sys.exit(main())
