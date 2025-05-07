@@ -4,11 +4,11 @@
 #       dependencies and as a way to store the changelog; both these things
 #       should be split out and the spec file removed.
 # 
-%global betatag .pre
+#global betatag .pre
 %global _release 1
 
 Name:           osg-build
-Version:        1.99.2
+Version:        1.99.5
 Release:        %{?betatag:0.}%{_release}%{?betatag}%{?dist}
 Summary:        Build tools for the OSG
 
@@ -132,7 +132,7 @@ fi
 %{python_sitelib}/osgbuild/utils.py*
 %{python_sitelib}/osgbuild/version.py*
 %{_datadir}/%{name}/rpmlint.cfg
-%python_sitelib/osgbuild/__pycache__
+%{python_sitelib}/osgbuild/__pycache__
 
 %files mock
 %{python_sitelib}/osgbuild/mock.py*
@@ -150,6 +150,15 @@ fi
 
 
 %changelog
+* Tue May 06 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 1.99.5-1
+- Download upstream sources from the new server https://sw-upstream.svc.osg-htc.org, falling back to https://vdt.cs.wisc.edu on failure (SOFTWARE-6106)
+- Drop the "AFS cache prefix" -- upstream sources are always downloaded via HTTP(S), even if AFS is locally mounted
+- Add ability to make "variant" packages by adding some suffix starting with `__` to the package directory
+- Koji builds now require specifying the target with --repo or --koji-target
+- Removed the --autoclean and --no-autoclean args -- old dirs are always cleaned up on a run
+- Disable the --3.5-upcoming and --3.6-upcoming args
+- Bug fix: don't specify a --tag when git cloning from HEAD
+
 * Thu Oct 19 2023 Mátyás Selmeci <matyas@cs.wisc.ed - 1.99.2-0.1.pre
 - Reorganize code to make it pip installable
 - Add package signing script (SOFTWARE-5637)
