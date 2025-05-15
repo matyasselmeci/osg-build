@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import re
+import shutil
 import sys
 import datetime
 import time
@@ -121,7 +122,7 @@ class DateAction(argparse.Action):
 def main(argv):
     args = parse_cli(argv[1:])
 
-    if not utils.which('osg-koji'):
+    if not shutil.which('osg-koji'):
         raise Error("osg-koji not found in $PATH")
     mode = detect_mode(args.koji_object)
     lh_output = run_list_history(args.koji_object)

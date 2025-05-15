@@ -51,7 +51,7 @@ class GlobNotFoundError(Error):
 class FileNotFoundInSearchPathError(Error):
     """Error raised when a required file wasn't found in the search path."""
     def __init__(self, fname, searchpath):
-        msg = "Couldn't find file named '%s' in search path %s." % (fname, _os.pathsep.join(searchpath))
+        msg = f"Couldn't find file named '{fname}' in search path {_os.pathsep.join(searchpath)}."
         Error.__init__(self, msg)
 
 

@@ -5,6 +5,7 @@ import logging
 import re
 from optparse import OptionParser
 import os
+from shlex import quote as shell_quote
 import shutil
 import sys
 import traceback
@@ -177,7 +178,7 @@ def get_spec_name_in_srpm(srpm):
     there is exactly one spec file in the SRPM -- if there is more than
     one spec file, returns the name of the first one ``cpio'' prints.
     """
-    out, ret = utils.sbacktick("rpm2cpio %s | cpio -t '*.spec' 2> /dev/null" % utils.shell_quote(srpm), shell=True)
+    out, ret = utils.sbacktick("rpm2cpio %s | cpio -t '*.spec' 2> /dev/null" % shell_quote(srpm), shell=True)
     if ret != 0:
         raise Error("Unable to get list of spec files from %s" % srpm)
     try:
@@ -193,9 +194,9 @@ def get_spec_name_in_srpm(srpm):
 
 def extract_from_rpm(rpm, file_or_pattern=None):
     """Extract a specific file or glob from an rpm."""
-    command = "rpm2cpio " + utils.shell_quote(rpm) + " | cpio -ivd"
+    command = "rpm2cpio " + shell_quote(rpm) + " | cpio -ivd"
     if file_or_pattern:
-        command += " " + utils.shell_quote(file_or_pattern)
+        command += " " + shell_quote(file_or_pattern)
     return utils.checked_call(command, shell=True)
 
 

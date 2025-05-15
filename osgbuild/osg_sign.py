@@ -157,7 +157,7 @@ def check_program_requirements():
 
     """
     for program in "rpm", "osg-koji", "rpmsign", "gpg":
-        if not utils.which(program):
+        if not shutil.which(program):
             raise ProgramNotFoundError(program)
 
 
@@ -182,7 +182,7 @@ def do_list_keys(config: SigningKeysConfig):
     print("Signing keys:")
     utils.print_line()
     fmt = "%-7s %-31s %-11s %-17s %-7s"
-    gpg_bin = utils.which("gpg")
+    gpg_bin = shutil.which("gpg")
     if not gpg_bin:
         log.warning("gpg not found; unable to check which keys are available")
     print(fmt % (" Sign ", " Name ", " Key ID ", " Supported dvers ", " Digest algo "))
@@ -198,8 +198,8 @@ def sign_rpms(signing_key, rpms):
     rpm_cmd_base = ["rpm", "--resign"]
     rpm_cmd_base += ["--define", f"_signature gpg",
                 "--define", f"_gpg_name {signing_key.keyid}",
-                "--define", f"_gpgbin {utils.which('gpg')}",
-                "--define", f"__gpg {utils.which('gpg')}",
+                "--define", f"_gpgbin {shutil.which('gpg')}",
+                "--define", f"__gpg {shutil.which('gpg')}",
                 ]
     if signing_key.digest_algo:
         rpm_cmd_base += ["--define", f"_gpg_digest_algo {signing_key.digest_algo}"]

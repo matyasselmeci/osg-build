@@ -18,7 +18,7 @@ from .error import *
 log = logging.getLogger(__name__)
 
 
-class SRPMBuild(object):
+class SRPMBuild:
     """Tasks for an SPRM build and helper functions."""
 
     def __init__(self, package_dir, buildopts, mock_obj, koji_obj):
@@ -179,7 +179,7 @@ class SRPMBuild(object):
         and run 'quilt setup' on the spec file.
 
         """
-        if not utils.which("quilt"):
+        if not shutil.which("quilt"):
             raise ProgramNotFoundError("quilt")
 
         if os.path.exists(self.quilt_dir):
@@ -282,11 +282,9 @@ class SRPMBuild(object):
 
     def lint(self):
         """lint task. Prebuild the package and run rpmlint on the SRPM."""
-        if not utils.which("rpmlint"):
+        if not shutil.which("rpmlint"):
             raise ProgramNotFoundError("rpmlint")
-        conf_file = utils.find_file("rpmlint.cfg", DATA_FILE_SEARCH_PATH)
-        if not conf_file:
-            raise FileNotFoundInSearchPathError("rpmlint.cfg", DATA_FILE_SEARCH_PATH)
+        conf_file = utils.find_file("rpmlint.cfg", strict=True)
         srpm = self.prebuild()
         lint_output, lint_returncode = utils.sbacktick(
             ["rpmlint", "-f", conf_file, srpm])

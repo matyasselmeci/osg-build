@@ -8,6 +8,7 @@ import logging
 import os
 import random
 import re
+import shutil
 import string
 import time
 import urllib
@@ -65,7 +66,7 @@ def get_koji_config(config_file=None):
 
 def get_koji_cmd():
     """Get the command used to call koji."""
-    which_osg_koji = utils.which("osg-koji")
+    which_osg_koji = shutil.which("osg-koji")
     if which_osg_koji:
         return [which_osg_koji]
     else:

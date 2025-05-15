@@ -8,6 +8,7 @@ from optparse import OptionGroup, OptionParser, OptionValueError
 import os
 from pathlib import Path
 import re
+from shlex import quote as shell_quote
 import sys
 import tempfile
 import typing as t
@@ -832,7 +833,7 @@ def get_enabled_dvers(task: str, repo: str = "") -> t.List[str]:
 
 def print_version_and_exit():
     """Print version and exit"""
-    scriptpath = utils.shell_quote(os.path.dirname(os.path.realpath(sys.argv[0])))
+    scriptpath = shell_quote(os.path.dirname(os.path.realpath(sys.argv[0])))
     out, ret = "", 0
     try:
         out, ret = utils.sbacktick("cd %s && git describe --tags 2>/dev/null" % scriptpath,

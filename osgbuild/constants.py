@@ -22,21 +22,6 @@ LOCAL_KOJI_INI = "koji.ini"
 KOJI_HUB = "https://koji.osg-htc.org"
 KOJI_WEB = "https://koji.osg-htc.org"
 
-DATA_FILE_SEARCH_PATH = [_os.path.abspath(_os.path.dirname(__file__) + "/../data")]
-if "OSG_LOCATION" in _os.environ:
-    DATA_FILE_SEARCH_PATH.append(_os.environ["OSG_LOCATION"] + DATA_DIR)
-DATA_FILE_SEARCH_PATH.append(DATA_DIR)
-try:
-    try:
-        # noinspection PyPackageRequirements
-        import importlib_resources as _importlib_resources
-    except ImportError:
-        import importlib.resources as _importlib_resources
-    DATA_FILE_SEARCH_PATH.append(str(_importlib_resources.files("osgbuild.data")))
-except (ImportError, AttributeError):
-    pass
-
-
 DEFAULT_BUILDOPTS_COMMON = {
     'background': False,
     'cache_prefix': None,

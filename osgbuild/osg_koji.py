@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import configparser
 import os
+from shlex import quote as shell_quote
 import shutil
 from string import Template
 import sys
@@ -8,7 +9,6 @@ import sys
 from optparse import OptionParser
 
 from osgbuild.constants import (
-    DATA_FILE_SEARCH_PATH,
     DEFAULT_AUTHTYPE,
     KOJI_USER_CONFIG_DIR,     # old koji config dir
     OSG_KOJI_USER_CONFIG_DIR) # new koji config dir (created by this script)
@@ -18,7 +18,7 @@ from osgbuild.utils import (
     find_file,
     safe_make_backup,
     safe_makedirs,
-    shell_quote)
+)
 from osgbuild.error import Error, KojiError
 from osgbuild import credhelper, kojiinter
 
@@ -131,7 +131,7 @@ def setup_parse_args(args):
 
 
 def make_config_text(authtype, principal):
-    template_path = find_file(KOJI_CONFIG_TEMPLATE, DATA_FILE_SEARCH_PATH)
+    template_path = find_file(KOJI_CONFIG_TEMPLATE)
     if os.path.exists(SERVERCA_REDHAT):
         serverca = SERVERCA_REDHAT
     elif os.path.exists(SERVERCA_UBUNTU):

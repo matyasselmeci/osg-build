@@ -2,11 +2,13 @@
 import configparser
 import contextlib
 import errno
+import functools
 from itertools import zip_longest
 import logging
 import os
 import re
 import shlex
+from shlex import quote as shell_quote
 import shutil
 import subprocess
 import sys
@@ -58,14 +60,6 @@ class CalledProcessError(Exception):
         return str((repr(self.process),
                     repr(self.returncode),
                     repr(self.output)))
-
-
-# pipes.quote was deprecated in Python 2.7, but its replacement, shlex.quote
-# was not added until Python 3.3
-try:
-    shell_quote = shlex.quote
-except AttributeError:
-    from pipes import quote as shell_quote
 
 
 class IniConfiguration:
@@ -288,7 +282,7 @@ def find_files(filename, paths=None, strict=False):
     """
     matches = []
     if paths is None:
-        paths = constants.DATA_FILE_SEARCH_PATH
+        paths = get_data_file_search_path()
     for p in paths:
         j = os.path.join(p, filename)
         if os.path.isfile(j):
@@ -381,24 +375,6 @@ def safe_make_backup(filename, move=True, simple_suffix=False):
             pass
         else:
             raise
-
-
-# original from rsvprobe.py by Marco Mambelli
-def which(program):
-    """Python replacement for which"""
-    def is_exe(f_path):
-        """is a regular file and is executable"""
-        return os.path.isfile(f_path) and os.access(f_path, os.X_OK)
-    fpath, _ = os.path.split(program)
-    if fpath:
-        if is_exe(program):
-            return program
-    else:
-        for path in os.environ["PATH"].split(os.pathsep):
-            exe_file = os.path.join(path, program)
-            if is_exe(exe_file):
-                return exe_file
-    return None
 
 
 def printf(fstring: AnyStr, *args, **kwargs):
@@ -561,6 +537,25 @@ def popd():
         raise IndexError("Directory stack empty")
 
 
+@functools.lru_cache(1)
+def get_data_file_search_path():
+    data_file_search_path = [os.path.abspath(os.path.dirname(__file__) + "/../data")]
+    if "OSG_LOCATION" in os.environ:
+        data_file_search_path.append(os.environ["OSG_LOCATION"] + constants.DATA_DIR)
+    data_file_search_path.append(constants.DATA_DIR)
+    try:
+        try:
+            # noinspection PyPackageRequirements
+            import importlib_resources as _importlib_resources
+        except ImportError:
+            import importlib.resources as _importlib_resources
+        data_file_search_path.append(str(_importlib_resources.files("osgbuild.data")))
+    except (ImportError, AttributeError):
+        pass
+    return data_file_search_path
+
+
+@functools.lru_cache(1)
 def get_local_machine_dver():
     # type: () -> str
     """Return the distro version (e.g. 'el6', 'el7') of the local machine
