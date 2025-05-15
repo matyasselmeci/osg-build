@@ -4,6 +4,7 @@ import pathlib
 import re
 import os
 import errno
+import typing as t
 from urllib.parse import urlsplit
 
 from .error import Error, UsageError, VCSError
@@ -366,7 +367,10 @@ def verify_correct_remote(package_dir):
         raise VCSError("Remote %s for directory %s is not an officially known remote." % (remote, package_dir))
 
 
-def verify_correct_branch(package_dir, buildopts):
+def verify_correct_branch(
+        package_dir,
+        koji_targets: t.Sequence[str],
+):
     """Check that the user is not trying to build from trunk into upcoming, or
     vice versa.
     """
@@ -384,14 +388,10 @@ def verify_correct_branch(package_dir, buildopts):
         if remote in REMOTES["osg"].urls:
             verify_git_svn_commit(package_dir)
 
-    assert buildopts['enabled_dvers'], "No enabled dvers -- catch this sooner"
-    enabled_dvers = sorted(buildopts['enabled_dvers'])
     _log.debug("found remote %s", remote)
-    for dver in enabled_dvers:
-        koji_target = buildopts['targetopts_by_dver'][dver]['koji_target']
-        if not koji_target:
-            _log.debug(f"No koji target for {dver} -- skipping VCS check")
-            continue
+    if isinstance(koji_targets, str):
+        koji_targets = [koji_targets]
+    for koji_target in koji_targets:
         for rt in RESTRICTED_TARGETS.values():
             target_match = rt.koji_target_re.fullmatch(koji_target)
             if not target_match:

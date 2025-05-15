@@ -2,6 +2,7 @@
 import logging
 import re
 import os
+import typing as t
 
 from .error import Error, VCSError, UsageError
 from .target_protection import RESTRICTED_TARGETS
@@ -131,7 +132,10 @@ def verify_package_info(package_info):
 #
 
 
-def verify_correct_branch(package_dir, buildopts):
+def verify_correct_branch(
+        package_dir,
+        koji_targets: t.Sequence[str],
+):
     package_info = get_package_info(package_dir)
     url = package_info['canon_url']
 
@@ -139,13 +143,10 @@ def verify_correct_branch(package_dir, buildopts):
         raise VCSError("must build from a branch in branches/")
 
     branch = url.rsplit('/')[-2]  # .../branches/osg-3.6/xrootd -> osg-3.6
-    assert buildopts['enabled_dvers'], "No enabled dvers -- catch this sooner"
-    enabled_dvers = sorted(buildopts['enabled_dvers'])
-    for dver in enabled_dvers:
-        koji_target = buildopts['targetopts_by_dver'][dver]['koji_target']
-        if not koji_target:
-            _log.debug(f"No koji target for {dver} -- skipping VCS check")
-            continue
+
+    if isinstance(koji_targets, str):
+        koji_targets = [koji_targets]
+    for koji_target in koji_targets:
         for rt in RESTRICTED_TARGETS.values():
             target_match = rt.koji_target_re.fullmatch(koji_target)
             if not target_match:

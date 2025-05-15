@@ -92,7 +92,15 @@ def koji_main(buildopts, package_dirs):
                     raise
 
             try:
-                vcs_module.verify_correct_branch(pkg, buildopts)
+                koji_targets = [
+                    opts["koji_target"]
+                    for opts in buildopts["targetopts_by_dver"].values()
+                    if "koji_target" in opts
+                ]
+                vcs_module.verify_correct_branch(
+                    package_dir=pkg,
+                    koji_targets=koji_targets,
+                )
             except VCSError as err:
                 if buildopts['scratch']:
                     log.warning("\nVCS error for %s: %s\n", pkg, err, exc_info=False)
@@ -103,7 +111,7 @@ def koji_main(buildopts, package_dirs):
                     raise
 
         else:
-            is_pkg_dir(pkg)
+            verify_if_pkg_dir(pkg)
 
     #
     # Main loop
@@ -163,7 +171,7 @@ def main(argv=None):
 
     # verify package dirs
     for pkg in package_dirs:
-        is_pkg_dir(pkg)
+        verify_if_pkg_dir(pkg)
 
     # main loop
     for pkg in package_dirs:
@@ -233,7 +241,7 @@ def watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir):
                         log.info("Results and logs downloaded to %s", destdir)
 
 
-def is_pkg_dir(pkg):
+def verify_if_pkg_dir(pkg):
     if not os.path.isdir(pkg):
         raise UsageError(pkg + " isn't a directory!")
     if ((not os.path.isdir(os.path.join(pkg, "osg"))) and
