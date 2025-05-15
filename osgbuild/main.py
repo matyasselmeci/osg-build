@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import tempfile
+import typing as t
 import urllib.error
 import urllib.request
 import configparser
@@ -39,9 +40,9 @@ log_formatter = logging.Formatter(" >> %(message)s")
 log_consolehandler.setFormatter(log_formatter)
 log.addHandler(log_consolehandler)
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Main function
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
 
 def koji_main(buildopts, package_dirs):
@@ -74,41 +75,13 @@ def koji_main(buildopts, package_dirs):
 
     for pkg in package_dirs:
         if buildopts['want_vcs']:
-            # verify working dirs
-            # vcs_module is the module for accessing the repo
-            if svn.is_svn(pkg):
-                vcs_module = svn
-            else:
-                if git.is_git_new_enough() and git.is_git(pkg):
-                    vcs_module = git
-            if not vcs_module:
-                raise VCSError("VCS build requested but could not determine VCS (SVN or Git) for %s" % pkg)
-
-            if not utils.is_url(pkg):
-                try:
-                    vcs_module.verify_working_dir(pkg)
-                except VCSError:
-                    log.error("VCS build requested but no usable VCS (SVN or Git) found for %s", pkg)
-                    raise
-
-            try:
-                koji_targets = [
-                    opts["koji_target"]
-                    for opts in buildopts["targetopts_by_dver"].values()
-                    if "koji_target" in opts
-                ]
-                vcs_module.verify_correct_branch(
-                    package_dir=pkg,
-                    koji_targets=koji_targets,
-                )
-            except VCSError as err:
-                if buildopts['scratch']:
-                    log.warning("\nVCS error for %s: %s\n", pkg, err, exc_info=False)
-                    log.debug("Traceback: %s", traceback.format_exc())
-                    if sys.stdin.isatty() and utils.ask_yn("Abort?"):
-                        raise
-                else:
-                    raise
+            scratch = buildopts["scratch"]
+            koji_targets = [
+                opts["koji_target"]
+                for opts in buildopts["targetopts_by_dver"].values()
+                if "koji_target" in opts
+            ]
+            vcs_module = get_and_verify_vcs(pkg, koji_targets, scratch)
 
         else:
             verify_if_pkg_dir(pkg)
@@ -241,6 +214,47 @@ def watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir):
                         log.info("Results and logs downloaded to %s", destdir)
 
 
+def get_and_verify_vcs(pkg: str, koji_targets: t.Sequence[str], scratch: bool):
+    """
+    Verify working dirs and return the VCS module for accessing the repo.
+
+    Args:
+        pkg: the package name to verify
+        koji_targets: the list of Koji targets to verify
+        scratch: whether the build is a scratch build
+            (and therefore branch verification may be ignored)
+
+    Returns:
+        The VCS module (`svn` or `git`) that can be used to do the build from.
+    """
+    if svn.is_svn(pkg):
+        vcs_module = svn
+    elif git.is_git_new_enough() and git.is_git(pkg):
+        vcs_module = git
+    else:
+        raise VCSError("VCS build requested but could not determine VCS (SVN or Git) for %s" % pkg)
+    if not utils.is_url(pkg):
+        try:
+            vcs_module.verify_working_dir(pkg)
+        except VCSError:
+            log.error("VCS build requested but no usable VCS (SVN or Git) found for %s", pkg)
+            raise
+    try:
+        vcs_module.verify_correct_branch(
+            package_dir=pkg,
+            koji_targets=koji_targets,
+        )
+    except VCSError as err:
+        if scratch:
+            log.warning("\nVCS error for %s: %s\n", pkg, err, exc_info=False)
+            log.debug("Traceback: %s", traceback.format_exc())
+            if sys.stdin.isatty() and utils.ask_yn("Abort?"):
+                raise
+        else:
+            raise
+    return vcs_module
+
+
 def verify_if_pkg_dir(pkg):
     if not os.path.isdir(pkg):
         raise UsageError(pkg + " isn't a directory!")
@@ -249,8 +263,6 @@ def verify_if_pkg_dir(pkg):
         raise UsageError(pkg +
                          " isn't a package directory "
                          "(must have either osg/ or upstream/ dirs or both)")
-
-
 
 
 def init(argv):
@@ -661,7 +673,6 @@ def parser_targetopts_callback(option, opt_str, value, parser, *_, **__):
         if not verify_release_in_targetopts_by_dver(targetopts_by_dver[dver]):
             raise OptionValueError('Inconsistent redhat release in parameter %s: %s' % (opt_str, value))
 # end of parser_targetopts_callback()
-
 
 
 def get_task(args):
