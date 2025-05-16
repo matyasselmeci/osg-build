@@ -27,6 +27,7 @@ if "OSG_LOCATION" in _os.environ:
 DATA_FILE_SEARCH_PATH.append(DATA_DIR)
 try:
     try:
+        # noinspection PyPackageRequirements
         import importlib_resources as _importlib_resources
     except ImportError:
         import importlib.resources as _importlib_resources
@@ -34,52 +35,6 @@ try:
 except (ImportError, AttributeError):
     pass
 
-# fmt: off
-SVN_RESTRICTED_BRANCHES = {
-    r'^branches/(?P<osgver>[0-9.]+)-upcoming$'  : 'upcoming',
-    r'^branches/osg-internal$'                  : 'oldinternal',
-    r'^branches/devops$'                        : 'devops',
-    r'^branches/osg-(?P<osgver>\d+\.\d+)$'      : 'versioned',
-    r'^branches/(?P<osgver>[0-9.]+)-main$'      : 'versioned',
-    r'^branches/(?P<osgver>[0-9.]+)-internal$'  : 'internal',
-}
-KOJI_RESTRICTED_TARGETS = {
-    r'^osg-(el\d+)$'                                : 'main',
-    r'^osg-(?P<osgver>[0-9.]+)-upcoming-(el\d+)$'   : 'upcoming',
-    r'^devops-(el\d+)$'                             : 'devops',
-    r'^osg-(el\d+)-internal$'                       : 'oldinternal',
-    r'^osg-(?P<osgver>\d+\.\d+)-(el\d+)$'           : 'versioned',
-    r'^osg-(?P<osgver>[0-9.]+)-main-(el\d+)$'       : 'versioned',
-    r'^osg-(?P<osgver>[0-9.]+)-internal-(el\d+)$'   : 'internal',
-    r'^chtc-(el\d+)$'                               : 'chtc',
-}
-GIT_RESTRICTED_BRANCHES = {
-    r'^(\w*/)?(?P<osgver>[0-9.]+)-upcoming$'    : 'upcoming',
-    r'^(\w*/)?internal$'                        : 'oldinternal',
-    r'^(\w*/)?devops$'                          : 'devops',
-    r'^(\w*/)?osg-(?P<osgver>\d+\.\d+)$'        : 'versioned',
-    r'^(\w*/)?(?P<osgver>[0-9.]+)-main$'        : 'versioned',
-    r'^(\w*/)?(?P<osgver>[0-9.]+)-internal$'    : 'internal',
-}
-# fmt: on
-
-OSG_REMOTE = 'https://github.com/opensciencegrid/Software-Redhat.git'
-OSG_AUTH_REMOTE = 'git@github.com:opensciencegrid/Software-Redhat.git'
-HCC_REMOTE = 'https://github.com/unlhcc/hcc-packaging.git'
-HCC_AUTH_REMOTE = 'git@github.com:unlhcc/hcc-packaging.git'
-CHTC_REMOTE = 'https://github.com/CHTC/packaging.git'
-CHTC_AUTH_REMOTE = 'git@github.com:CHTC/packaging.git'
-
-KNOWN_GIT_REMOTES = [HCC_REMOTE,
-                     HCC_AUTH_REMOTE,
-                     OSG_REMOTE,
-                     OSG_AUTH_REMOTE,
-                     CHTC_REMOTE,
-                     CHTC_AUTH_REMOTE]
-# Map the authenticated URL to an anonymous checkout URL.
-GIT_REMOTE_MAPS = {HCC_AUTH_REMOTE: HCC_REMOTE,
-                   OSG_AUTH_REMOTE: OSG_REMOTE,
-                   CHTC_AUTH_REMOTE: CHTC_REMOTE}
 
 DEFAULT_BUILDOPTS_COMMON = {
     'background': False,
