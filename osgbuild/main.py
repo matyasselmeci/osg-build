@@ -254,7 +254,10 @@ def init(argv):
     if options.loglevel:
         set_loglevel(options.loglevel)
 
-    if options.repo_list:
+    if options.repo_list:  # TODO this should really be a task
+        if not kojiinter:
+            raise Error('Cannot get repo list without the Koji plugin.\n'
+                        'Install osg-build-koji to make it available.')
         print_repos_and_exit()
 
     task = get_task(args)
