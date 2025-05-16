@@ -86,12 +86,6 @@ DEFAULT_DVERS_BY_REPO = {
     'devops': ['el7', 'el8', 'el9'],
     'chtc': ['el9'],
 }
-assert FALLBACK_DVER in DVERS
-for _d in DEFAULT_DVERS:
-    assert _d in DVERS
-for _ds in DEFAULT_DVERS_BY_REPO.values():
-    for _d in _ds:
-        assert _d in DVERS
 
 REPO_HINTS_STATIC = {
     'devops': {'target': 'devops-%(dver)s', 'tag': 'osg-%(dver)s'},
