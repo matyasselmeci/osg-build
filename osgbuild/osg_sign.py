@@ -23,6 +23,11 @@ from .utils import IniConfiguration, print_line
 log = logging.getLogger(__name__)
 
 
+SIGN_SLICE = 10
+SIGN_TIMEOUT = 200
+IMPORT_TIMEOUT = 200
+
+
 class SigningError(Error):
     """Base class for errors in the signing module"""
 
@@ -190,31 +195,34 @@ def do_list_keys(config: SigningKeysConfig):
 
 
 def sign_rpms(signing_key, rpms):
-    rpm_cmd = ["rpm", "--resign"]
-    rpm_cmd += ["--define", f"_signature gpg",
+    rpm_cmd_base = ["rpm", "--resign"]
+    rpm_cmd_base += ["--define", f"_signature gpg",
                 "--define", f"_gpg_name {signing_key.keyid}",
                 "--define", f"_gpgbin {utils.which('gpg')}",
                 "--define", f"__gpg {utils.which('gpg')}",
                 ]
     if signing_key.digest_algo:
-        rpm_cmd += ["--define", f"_gpg_digest_algo {signing_key.digest_algo}"]
-    rpm_cmd += rpms
+        rpm_cmd_base += ["--define", f"_gpg_digest_algo {signing_key.digest_algo}"]
 
-    try:
-        log.debug("Signing rpm with command %r", rpm_cmd)
-        subprocess.run(rpm_cmd, timeout=600, check=True)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as err:
-        raise SigningError("Signing failed: %s" % err) from err
+    for idx in range(0, len(rpms), SIGN_SLICE):
+        rpm_cmd = rpm_cmd_base + rpms[idx:idx+SIGN_SLICE]
+        try:
+            log.debug("Signing rpm with command %r", rpm_cmd)
+            subprocess.run(rpm_cmd, timeout=SIGN_TIMEOUT, check=True)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as err:
+            raise SigningError("Signing failed: %s" % err) from err
 
     log.info("Signing complete.")
 
 
 def import_signatures(rpms: List[str]):
     """Import the signatures from the given RPM files into Koji."""
-    try:
-        subprocess.run(["osg-koji", "import-sig"] + rpms, timeout=900, check=True)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as err:
-        raise SigningError("Import of signatures failed (%s)" % err) from err
+    for idx in range(0, len(rpms), SIGN_SLICE):
+        try:
+            subprocess.run(["osg-koji", "import-sig"] + rpms[idx:idx+SIGN_SLICE],
+                           timeout=IMPORT_TIMEOUT, check=True)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as err:
+            raise SigningError("Import of signatures failed (%s)" % err) from err
 
 
 def sign_and_import_build(build_nvr: str, signing_key: SigningKey, kojihelper: KojiHelper, results_dir=None,
