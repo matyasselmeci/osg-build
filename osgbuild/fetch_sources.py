@@ -128,15 +128,18 @@ def fetch_cached_source(relpath, sha1sum=None, ops=None):
         backup_uri = os.path.join(C.BACKUP_WEB_CACHE_PREFIX, relpath)
         try:
             return fetch_uri_source(primary_uri, sha1sum, ops=ops)
-        except CouldNotDownload as err:
+        except CouldNotDownload as err1:
             # Couldn't download -- 404?  We can try the backup URI.
             # (If we could download but not save, finding another source wouldn't help)
-            log.warning(
+            log.debug(
                 "Could not download from primary cache URI %s; trying backup %s. "
                 "Error was: %s",
-                primary_uri, backup_uri, err
+                primary_uri, backup_uri, err1
             )
-            return fetch_uri_source(backup_uri, sha1sum, ops=ops)
+            try:
+                return fetch_uri_source(backup_uri, sha1sum, ops=ops)
+            except CouldNotDownload as err2:
+                raise CouldNotDownload("%s\n%s" % (err1, err2))
 
 
 def fetch_uri_source(uri, sha1sum=None, ops=None, filename=None):
@@ -159,7 +162,7 @@ def download_uri(uri, outfile):
     try:
         handle = urllib.request.urlopen(uri)
     except urllib.error.URLError as err:
-        raise CouldNotDownload("Unable to download %s\n%s" % (uri, err))
+        raise CouldNotDownload("Unable to download %s: %s" % (uri, err))
 
     sha = hashlib.sha1()
     try:
@@ -168,7 +171,7 @@ def download_uri(uri, outfile):
                 desthandle.write(chunk)
                 sha.update(chunk)
     except EnvironmentError as e:
-        raise CouldNotSave("Unable to save downloaded file to %s\n%s" % (outfile, e))
+        raise CouldNotSave("Unable to save downloaded file to %s: %s" % (outfile, e))
     return sha.hexdigest()
 
 
