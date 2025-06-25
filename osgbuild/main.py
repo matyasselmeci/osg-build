@@ -97,7 +97,7 @@ def koji_main(buildopts, package_dirs):
                 if buildopts['scratch']:
                     log.warning("\nVCS error for %s: %s\n", pkg, err, exc_info=False)
                     log.debug("Traceback: %s", traceback.format_exc())
-                    if os.isatty(sys.stdin) and utils.ask_yn("Abort?"):
+                    if sys.stdin.isatty() and utils.ask_yn("Abort?"):
                         raise
                 else:
                     raise
