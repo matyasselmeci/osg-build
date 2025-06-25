@@ -58,23 +58,23 @@ def is_git(package_dir):
         return False
     pwd = os.getcwd()
     try:
-        try:
-            os.chdir(package_dir)
-        except OSError as ose:
-            if ose.errno == errno.ENOENT:
-                raise Error("%s is not a valid package directory\n(%s)" % (package_dir, ose))
-        command = ["git", "status", "--porcelain"]
-        try:
-            err = utils.sbacktick(command, err2out=True)[1]
-        except OSError as ose:
-            if ose.errno != errno.ENOENT:
-                raise
-            err = 1
-        if err:
-            return False
-    finally:
-        os.chdir(pwd)
-    return True
+        os.chdir(package_dir)
+    except OSError as ose:
+        if ose.errno == errno.ENOENT:
+            raise Error("%s is not a valid package directory\n(%s)" % (package_dir, ose))
+    command = ["git", "status", "--porcelain"]
+    try:
+        err = utils.sbacktick(command, err2out=True)[1]
+    except OSError as ose:
+        if ose.errno != errno.ENOENT:
+            os.chdir(pwd)
+            raise
+        err = 1
+    os.chdir(pwd)
+    if err:
+        return False
+    else:
+        return True
 
 
 def _normalize_remote(remote_url):
