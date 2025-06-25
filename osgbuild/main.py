@@ -736,7 +736,8 @@ def get_buildopts(options, task):
             machine_dver = utils.get_local_machine_dver() or FALLBACK_DVER
             buildopts['enabled_dvers'] = {machine_dver}
 
-    if kojiinter and task == "koji":
+    if task == "koji":
+        assert kojiinter, "kojiinter necessary for 'koji' task -- this should have been caught"
         if not buildopts["scratch"]:
             buildopts['want_vcs'] = True
         if buildopts["getfiles"]:
