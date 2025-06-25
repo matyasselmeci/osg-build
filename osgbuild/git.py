@@ -190,7 +190,7 @@ def get_known_remote(package_dir):
         remote_url = _normalize_remote(info[1])
         if remote_url in REMOTES_BY_URL:
             return remote_name, remote_url
-    raise VCSError("Known remote not found for directory %s; are URLs configurated correctly?" % package_dir)
+    raise VCSError("Known remote not found for directory %s; are URLs configured correctly?" % package_dir)
 
 
 def get_fetch_url(package_dir, remote):
