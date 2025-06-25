@@ -29,6 +29,24 @@ def run_git_cmd(top_dir, *args):
     return utils.sbacktick(command, err2out=True)
 
 
+def is_git_new_enough():
+    """Returns True if the version of git is at least the minimum required (2.0), False otherwise"""
+    command = ["git", "--version"]
+    try:
+        out = utils.backtick(command)
+    except OSError as ose:
+        _log.warning("Error getting git version; git unavailable: %s" % ose)
+        return False
+    mm = re.search(r"git version (\d+)\.(\d+)", out)
+    if not mm:
+        _log.warning("Error getting git version; could not parse version string")
+        return False
+    if int(mm.group(1)) >= 2:
+        return True
+    _log.warning("Git version 2 is required, but only %s.%s is installed" % (mm.group(1), mm.group(2)))
+    return False
+
+
 def is_git(package_dir):
     """Determine whether a given directory is part of a git repo."""
     # If package_dir is a URL, not a directory, then we can't cd into it to
