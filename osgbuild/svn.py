@@ -80,10 +80,11 @@ def is_outdated(package_dir):
         return False
 
 
-def verify_working_dir(pkg):
+def verify_working_dir(pkg) -> None:
     """Verify if a package working directory has uncommitted changes or is
-    outdated and ask the user what to do. Return True if it's ok to continue.
+    outdated and ask the user what to do.
 
+    Raises VCSError if there is an issue and the user chooses not to continue.
     """
     if is_uncommitted(pkg):
         if not utils.ask_yn("""\

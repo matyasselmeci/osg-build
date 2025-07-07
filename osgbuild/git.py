@@ -313,23 +313,24 @@ def is_outdated(package_dir):
     return True
 
 
-def verify_working_dir(pkg):
+def verify_working_dir(pkg) -> None:
     """Verify if a package working directory has uncommitted changes or is
-    outdated and ask the user what to do. Return True if it's ok to continue.
+    outdated and ask the user what to do.
 
+    Raises VCSError if there is an issue and the user chooses not to continue.
     """
     if is_uncommitted(pkg):
         if not utils.ask_yn("""\
 Package working directory %s has uncommitted changes that will not be included
 in the git build.
 Continue (yes/no)?""" % pkg):
-            return False
+            raise VCSError("Package working directory %s has uncommitted changes." % pkg)
     if is_outdated(pkg):
         if not utils.ask_yn("""\
 Package working directory %s is out of date and its contents may not reflect
 what will be built.
 Continue (yes/no)?""" % pkg):
-            return False
+            raise VCSError("Package working directory %s is out of date." % pkg)
     return True
 
 
