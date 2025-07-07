@@ -1,31 +1,42 @@
 """Helper functions for a git build."""
 import logging
+import pathlib
 import re
 import os
 import errno
+import typing as t
 from urllib.parse import urlsplit
 
-
-from .constants import GIT_RESTRICTED_BRANCHES, KOJI_RESTRICTED_TARGETS
-from .error import Error, VCSError
+from .error import Error, UsageError, VCSError
+from .target_protection import RESTRICTED_TARGETS, RemoteLayout, REMOTES
 from . import utils
-from . import constants
-
+from . import kojiinter
 
 
 _log = logging.getLogger(__name__)
 
+REMOTES_BY_URL = {}
+for k, v in REMOTES.items():
+    for url in v.urls:
+        REMOTES_BY_URL[url] = v
 
-def git_cmd(top_dir, *args):
+# Map the authenticated URL to an anonymous checkout URL.
+GIT_REMOTE_MAPS = {
+    # flatten list of dicts
+    k: v for r in REMOTES.values() for k, v in r.remote_map.items()
+}
+
+
+def git_cmd(run_dir, *args):
     # type: (str, *str) -> list
     """A list of params for doing a git command in a specific repo directory"""
-    return ["git", "-C", top_dir] + list(args)
+    return ["git", "-C", run_dir] + list(args)
 
 
-def run_git_cmd(top_dir, *args):
+def run_git_cmd(run_dir, *args):
     # type: (str, *str) -> tuple[str, int]
     """Run a git command and return its stdout+stderr, and exit code"""
-    command = git_cmd(top_dir, *args)
+    command = git_cmd(run_dir, *args)
     return utils.sbacktick(command, err2out=True)
 
 
@@ -126,78 +137,11 @@ def parse_git_url(git_url):
 # name.
 #
 
-def is_restricted_branch(branch):
-    """branch is a git branch such as 'osg-3.6' or 'devops'.
-    Allows for an optional word as an extra path component on the left.
 
-    """
-    for pattern in GIT_RESTRICTED_BRANCHES:
-        if re.search(pattern, branch):
-            return True
-    return False
-
-
-def is_restricted_target(target):
-    """target is a koji target such as 'osg-el6' or 'osg-3.6-el8'.
-    Assumes no extra characters on either side.
-
-    """
-    for pattern in KOJI_RESTRICTED_TARGETS:
-        if re.search(pattern, target):
-            return True
-    return False
-
-
-def restricted_branch_matches_target(branch, target):
-    """Return True if the pattern that matches `branch` is associated with the
-    same name (e.g. 'devops', 'main', 'upcoming', 'versioned') as the pattern that
-    matches `target`; False otherwise.
-    Special cases:
-    - if the name is 'versioned' (e.g. we're building from 'branches/osg-3.1') then the versions also have to match.
-    - treat 'main' (i.e. 'trunk') as 'versioned' with a version of '3.5'
-    - if the name is 'upcoming' (e.g. building from 'branches/3.6-upcoming') then the versions also have to match.
-      treat a missing version ('branches/upcoming') as '3.5'
-
-    Precondition: is_restricted_branch(branch) and is_restricted_target(target)
-    are True.
-
-    """
-    branch_match = branch_name = target_match = target_name = None
-    for (branch_pattern, branch_name) in GIT_RESTRICTED_BRANCHES.items():
-        branch_match = re.search(branch_pattern, branch)
-        if branch_match:
-            break
-    assert branch_match, \
-            "No GIT_RESTRICTED_BRANCHES pattern matching %s -- is_restricted_branch() should have caught this" % branch
-
-    for (target_pattern, target_name) in KOJI_RESTRICTED_TARGETS.items():
-        target_match = re.search(target_pattern, target)
-        if target_match:
-            break
-    assert target_match, \
-            "No KOJI_RESTRICTED_TARGETS pattern matching %s -- is_restricted_target() should have caught this" % target
-
-    # At this point branch_name should be one of the values (right-hand side) of
-    # GIT_RESTRICTED_BRANCHES, and target_name should be one of the values of
-    # KOJI_RESTRICTED_TARGETS.
-
-    # These might have OSG version numbers ("3.5") in them; make sure they match
-    branch_osgver = branch_match.groupdict().get("osgver", None)
-    target_osgver = target_match.groupdict().get("osgver", None)
-
-    # Deal with "main" (i.e. the "trunk" branch or the "osg-elX" targets), which are aliases for "3.5"
-    if target_name == "main":
-        target_name = "versioned"
-        target_osgver = "3.6"
-
-    # branch_osgver and target_osgver might be None, e.g. for devops but that's OK
-    return (branch_name == target_name) and (branch_osgver == target_osgver)
-
-
-def get_branch(package_dir):
+def get_git_branch(package_dir):
+    # type: (str) -> str
     """Return the current git branch for a given directory."""
-    top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    out, err = run_git_cmd(top_dir, "branch")
+    out, err = run_git_cmd(package_dir, "branch")
     if err:
         raise VCSError("Exit code %d getting git branch for directory %s.  Output:\n%s" % (err, package_dir, out))
     out = out.strip()
@@ -210,13 +154,30 @@ def get_branch(package_dir):
     return branch[0]
 
 
+def get_subtree_branch(package_dir):
+    """
+    Return the branch for the given package directory in a remote using the
+    'subtree' layout.
+
+    Args:
+        package_dir: the package directory to get the branch for
+
+    Returns: the branch name
+    """
+    # The "subtree" layout requires that the package directory be a subdirectory
+    # of the branch.
+    try:
+        return pathlib.Path(package_dir).absolute().parts[-2]
+    except IndexError:
+        raise VCSError("Unable to determine the branch for the package directory %s" % package_dir)
+
+
 def get_known_remote(package_dir):
-    """Return the first remote in the current directory's list of remotes which
-       is on osg-build's configured whitelist of remotes,
+    """Return the first remote in the current directory's list of urls which
+       is on osg-build's configured whitelist of urls,
        as a (name, normalized url) tuple.
        """
-    top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    out, err = run_git_cmd(top_dir, "remote", "-v")
+    out, err = run_git_cmd(package_dir, "remote", "-v")
     if err:
         raise VCSError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
     for line in out.splitlines():
@@ -227,16 +188,15 @@ def get_known_remote(package_dir):
             continue
         remote_name = info[0]
         remote_url = _normalize_remote(info[1])
-        if remote_url in constants.KNOWN_GIT_REMOTES:
+        if remote_url in REMOTES_BY_URL:
             return remote_name, remote_url
-    raise VCSError("Known remote not found for directory %s; are remotes configurated correctly?" % package_dir)
+    raise VCSError("Known remote not found for directory %s; are URLs configured correctly?" % package_dir)
 
 
 def get_fetch_url(package_dir, remote):
     """Return a fetch url
-       is on osg-build's configured whitelist of remotes."""
-    top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    out, err = run_git_cmd(top_dir, "remote", "-v")
+       is on osg-build's configured whitelist of urls."""
+    out, err = run_git_cmd(package_dir, "remote", "-v")
     if err:
         raise VCSError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
     for line in out.splitlines():
@@ -248,18 +208,17 @@ def get_fetch_url(package_dir, remote):
         dir_remote_name = info[0]
         dir_remote_url = _normalize_remote(info[1])
         if dir_remote_name == remote:
-            return constants.GIT_REMOTE_MAPS.setdefault(dir_remote_url, dir_remote_url)
+            return GIT_REMOTE_MAPS.setdefault(dir_remote_url, dir_remote_url)
             # ^^ mutates a constant, sigh
 
-    raise VCSError("Remote URL not found for remote %s in directory %s; are remotes " \
+    raise VCSError("Remote URL not found for remote %s in directory %s; are urls " \
         "configured correctly?" % (remote, package_dir))
 
 def get_current_branch_remote(package_dir):
     """Return the configured remote name for the current branch."""
-    branch = get_branch(package_dir)
+    branch = get_git_branch(package_dir)
 
-    top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    out, err = run_git_cmd(top_dir, "config", f"branch.{branch}.remote")
+    out, err = run_git_cmd(package_dir, "config", f"branch.{branch}.remote")
     if err:
         raise VCSError("Exit code %d getting git branch %s remote for directory '%s'. Output:\n%s" % \
                        (err, branch, package_dir, out))
@@ -269,8 +228,7 @@ def get_current_branch_remote(package_dir):
 
 def is_uncommitted(package_dir):
     """Return True if there are uncommitted changes or files in the git working dir."""
-    top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    out, err = run_git_cmd(top_dir, "status", "--porcelain")
+    out, err = run_git_cmd(package_dir, "status", "--porcelain", ".")
     if err:
         raise VCSError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
     if out:
@@ -281,11 +239,11 @@ def is_uncommitted(package_dir):
 
     remote = get_current_branch_remote(package_dir)
 
-    branch = get_branch(package_dir)
+    branch = get_git_branch(package_dir)
     branch_ref = "refs/heads/%s" % branch
     origin_ref_pat = re.compile(r"refs/(urls|remotes)/%s/%s" % (re.escape(remote), re.escape(branch)))
 
-    out, err = run_git_cmd(top_dir, "show-ref")
+    out, err = run_git_cmd(package_dir, "show-ref")
     if err:
         raise VCSError("Exit code %d getting git references for directory %s.  Output:\n%s" % (err, package_dir, out))
     branch_hash = ''
@@ -315,12 +273,11 @@ def is_outdated(package_dir):
 
     """
     remote = get_current_branch_remote(package_dir)
-    branch = get_branch(package_dir)
+    branch = get_git_branch(package_dir)
     branch_ref = "refs/heads/%s" % branch
     branch_hash = ''
 
-    top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    out, err = run_git_cmd(top_dir, "show-ref")
+    out, err = run_git_cmd(package_dir, "show-ref")
     if err:
         raise VCSError("Exit code %d getting git references for directory %s.  Output:\n%s" % (err, package_dir, out))
     for line in out.splitlines():
@@ -333,7 +290,7 @@ def is_outdated(package_dir):
     if not branch_hash:
         raise VCSError("Unable to determine local branch's hash.")
 
-    command = git_cmd(top_dir, "ls-remote", "--heads", remote)
+    command = git_cmd(package_dir, "ls-remote", "--heads", remote)
     out, err = utils.sbacktick(command)
     if err:
         raise VCSError("Exit code %d getting remote git status for directory %s. Output:\n%s" % (err, package_dir, out))
@@ -356,23 +313,24 @@ def is_outdated(package_dir):
     return True
 
 
-def verify_working_dir(pkg):
+def verify_working_dir(pkg) -> None:
     """Verify if a package working directory has uncommitted changes or is
-    outdated and ask the user what to do. Return True if it's ok to continue.
+    outdated and ask the user what to do.
 
+    Raises VCSError if there is an issue and the user chooses not to continue.
     """
     if is_uncommitted(pkg):
         if not utils.ask_yn("""\
 Package working directory %s has uncommitted changes that will not be included
 in the git build.
 Continue (yes/no)?""" % pkg):
-            return False
+            raise VCSError("Package working directory %s has uncommitted changes." % pkg)
     if is_outdated(pkg):
         if not utils.ask_yn("""\
 Package working directory %s is out of date and its contents may not reflect
 what will be built.
 Continue (yes/no)?""" % pkg):
-            return False
+            raise VCSError("Package working directory %s is out of date." % pkg)
     return True
 
 
@@ -380,14 +338,7 @@ def verify_package_dir(package_dir):
     """Check if package_dir points to a valid package dir (i.e. contains
     at least an osg/ dir or an upstream/ dir) and is in a git repo.
     """
-    top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    out, err = run_git_cmd(top_dir, "rev-parse", "--show-toplevel")
-    if err:
-        raise VCSError("Exit code %d getting git top-level directory of %s. Output:\n%s" % (err, package_dir, out))
-    if top_dir != out.strip():
-        raise VCSError("Specified package directory (%s) is not a top-level directory in the git repo (%s)." % \
-                       (package_dir, top_dir))
-    out, err = run_git_cmd(top_dir, "ls-files", "osg", "upstream")
+    out, err = run_git_cmd(package_dir, "ls-files", "osg", "upstream")
     if err:
         raise VCSError("Exit code %d getting git subdirectories of %s. Output:\n%s" % (err, package_dir, out))
     for line in out.split("\n"):
@@ -398,8 +349,7 @@ def verify_package_dir(package_dir):
 
 def verify_git_svn_commit(package_dir):
     """Verify the last commit in the git repo actually came from git-svn."""
-    top_dir = os.path.split(os.path.abspath(package_dir))[0]
-    out, err = run_git_cmd(top_dir, "log", "-n", "1")
+    out, err = run_git_cmd(package_dir, "log", "-n", "1")
     if err:
         raise VCSError("Exit code %d getting git log for directory %s. Output:\n%s" % (err, package_dir, out))
 
@@ -411,117 +361,99 @@ def verify_git_svn_commit(package_dir):
 
 
 def verify_correct_remote(package_dir):
-    """Verify the current branch remote is one of the known remotes."""
+    """Verify the current branch remote is one of the known urls."""
     remote = get_current_branch_remote(package_dir)
     known_remote = get_known_remote(package_dir)[0]
     if remote != known_remote:
         raise VCSError("Remote %s for directory %s is not an officially known remote." % (remote, package_dir))
 
 
-def verify_correct_branch(package_dir, buildopts):
+def verify_correct_branch(
+        package_dir,
+        koji_targets: t.Sequence[str],
+):
     """Check that the user is not trying to build from trunk into upcoming, or
     vice versa.
     """
     if utils.is_url(package_dir):
         # a git url -- we can only do some of our checks
-        remote, _, branch = parse_git_url(package_dir)
+        remote, _, git_branch = parse_git_url(package_dir)
         if not remote:
             raise VCSError("URL %s failed to parse as a git URL" % package_dir)
     else:
-        branch = get_branch(package_dir)
+        git_branch = get_git_branch(package_dir)
         remote = get_known_remote(package_dir)[1]
 
         verify_correct_remote(package_dir)
 
-        if remote in [constants.OSG_REMOTE, constants.OSG_AUTH_REMOTE]:
+        if remote in REMOTES["osg"].urls:
             verify_git_svn_commit(package_dir)
 
-    # We only have branching rules for OSG and HCC repos
-    if remote not in constants.KNOWN_GIT_REMOTES:
-        return
-
-    if not is_restricted_branch(branch):
-        # Developer branch -- any target ok
-        return
-    for dver in buildopts['enabled_dvers']:
-        target = buildopts['targetopts_by_dver'][dver]['koji_target']
-        if not target:
-            _log.debug(f"No koji target for {dver} -- skipping VCS check")
-            continue
-        _do_target_remote_checks(target, remote, branch)
-        if not is_restricted_target(target):
-            # Some custom target -- any branch ok
-            continue
-        if not restricted_branch_matches_target(branch, target):
-            raise VCSError("Forbidden to build from %s branch into %s target" % (branch, target))
-
-
-def _do_target_remote_checks_hcc(remote, branch):
-    if remote not in [constants.HCC_REMOTE, constants.HCC_AUTH_REMOTE]:
-        raise Error("""\
-Error: You must build into the HCC repo from a HCC git checkout.
-You must switch git repos or build targets.""")
-
-    if "master" not in branch:
-        raise Error("""\
-Error: Incorrect branch for koji build
-Only allowed to build into the HCC repo from the
-master branch!  You must switch branches.""")
-
-
-def _do_target_remote_checks_osg(remote):
-    if remote not in [constants.OSG_REMOTE, constants.OSG_AUTH_REMOTE]:
-        raise Error("""\
-Error: You must build into the OSG repo from an OSG git checkout.
-You must switch git repos or build targets.""")
-
-
-def _do_target_remote_checks_chtc(remote, branch):
-    if remote not in [constants.CHTC_REMOTE, constants.CHTC_AUTH_REMOTE]:
-        raise Error("""\
-Error: You must build into the CHTC repo from a CHTC git checkout.
-You must switch git repos or build targets.""")
-
-    if "main" not in branch:
-        raise Error("""\
-Error: Incorrect branch for koji build
-Only allowed to build into the CHTC repo from the
-main branch!  You must switch branches.""")
-
-
-def _do_target_remote_checks(target, remote, branch):
-        if target.startswith("hcc-"):
-            _do_target_remote_checks_hcc(remote, branch)
-        elif target.startswith("osg-"):
-            _do_target_remote_checks_osg(remote)
-        elif target.startswith("chtc-"):
-            _do_target_remote_checks_chtc(remote, branch)
+    _log.debug("found remote %s", remote)
+    if isinstance(koji_targets, str):
+        koji_targets = [koji_targets]
+    for koji_target in koji_targets:
+        for rt in RESTRICTED_TARGETS.values():
+            target_match = rt.koji_target_re.fullmatch(koji_target)
+            if not target_match:
+                continue
+            if not rt.git_branch_re:
+                raise VCSError(f"cannot build into {koji_target} from Git")
+            if remote not in REMOTES_BY_URL:
+                raise VCSError(f"cannot build into {koji_target} from unrecognized remote {remote}")
+            remote_info = REMOTES_BY_URL[remote]
+            if remote_info.name not in rt.remotes:
+                raise VCSError(f"cannot build into {koji_target} from the {remote_info.repo} remote")
+            _log.debug("remote %s has layout %s", remote_info.name, remote_info.layout)
+            if remote_info.layout == RemoteLayout.LEGACY:
+                branch = git_branch
+                branch_re = rt.git_branch_re
+            elif remote_info.layout == RemoteLayout.SUBTREE:
+                branch = get_subtree_branch(package_dir)
+                branch_re = rt.subtree_branch_re
+            else:
+                assert False, "Unknown remote layout %s" % remote_info.layout
+            if not branch_re:
+                _log.debug(f"{branch} is not in a repo with restricted branches")
+                continue
+            branch_match = branch_re.fullmatch(branch)
+            if not branch_match or target_match.groupdict() != branch_match.groupdict():
+                raise VCSError(f"branch/target mismatch: branch {branch} does not match target {koji_target}")
+            break
+        else:
+            _log.debug(f"{koji_target} is not a restricted target")
 
 
 def koji(package_dir, koji_obj, buildopts):
+    # type: (str, kojiinter.KojiInter, dict) -> int
     """koji task with a git build."""
     if utils.is_url(package_dir):
-        remote, package_name, branch = parse_git_url(package_dir)
+        remote, package_path, branch = parse_git_url(package_dir)
         if not remote:
             raise Error("Package '%s' does not parse as a Git URL" % package_dir)
         rev = branch
     else:
         package_dir = os.path.abspath(package_dir)
-        verify_package_dir(package_dir)
-        package_name = os.path.basename(package_dir)
+        if not verify_package_dir(package_dir):
+            raise UsageError("%s isn't a package directory "
+                             "(must have either osg/ or upstream/ dirs or both)" % (package_dir))
         remote = get_fetch_url(package_dir, get_known_remote(package_dir)[0])
-
-        top_dir = os.path.split(os.path.abspath(package_dir))[0]
-        out, err = run_git_cmd(top_dir, "log", "-1", "--pretty=format:%H")
+        remote_info = REMOTES_BY_URL[remote]
+        if remote_info.layout == RemoteLayout.SUBTREE:
+            package_path = os.path.join(*(pathlib.Path(package_dir).parts[-2:]))
+        else:
+            package_path = os.path.basename(package_dir)
+        out, err = run_git_cmd(package_dir, "log", "-1", "--pretty=format:%H")
         if err:
             raise VCSError("Exit code %d getting git hash for directory %s. Output:\n%s" % (err, package_dir, out))
         rev = out.strip()
 
+    package_name = os.path.basename(package_path)
     if not re.match(r"\w+", package_name): # sanity check
         raise Error("Package '%s' gives invalid package name '%s'" % (package_dir, package_name))
     if not buildopts.get('scratch'):
         koji_obj.add_pkg(package_name)
 
-    return koji_obj.build_git(_normalize_remote(remote),
-                              rev,
-                              package_name)
+    return koji_obj.build_git(remote=_normalize_remote(remote),
+                              rev=rev,
+                              path=package_path)

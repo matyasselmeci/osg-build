@@ -6,9 +6,11 @@ import logging
 import traceback
 from optparse import OptionGroup, OptionParser, OptionValueError
 import os
+from pathlib import Path
 import re
 import sys
 import tempfile
+import typing as t
 import urllib.error
 import urllib.request
 import configparser
@@ -39,9 +41,9 @@ log_formatter = logging.Formatter(" >> %(message)s")
 log_consolehandler.setFormatter(log_formatter)
 log.addHandler(log_consolehandler)
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Main function
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
 
 def koji_main(buildopts, package_dirs):
@@ -58,52 +60,29 @@ def koji_main(buildopts, package_dirs):
 
     require_minimum_version()
 
+    if buildopts.get("repo") not in {None, "", "None"}:
+        for dver in buildopts["enabled_dvers"]:
+            targetopts = buildopts["targetopts_by_dver"][dver]
+            hint = hint_for_dver(repo_hint=buildopts["repo"], dver=dver)
+            for key in ["koji_target", "koji_tag"]:
+                targetopts[key] = targetopts.get(key) or hint[key]
+
+    #
+    # Verify package dirs and VCS
+    #
     vcs_module = None
-
-    #
-    # Verify package dirs
-    #
-
-    # First check that the directories share a prefix, so you can't try to build
-    # 23-main/foo and 24-main/foo at the same time.
-    abs_pkg_dirs = [pkg if utils.is_url(pkg) else os.path.abspath(pkg) for pkg in package_dirs]
-    prefixes = {pkg.rpartition("/")[0] for pkg in abs_pkg_dirs}
-    if len(prefixes) != 1:
-        log.error("Multiple prefixes found: %s", prefixes)
-        raise Error("Package directories must share a directory prefix")
 
     for pkg in package_dirs:
         if buildopts['want_vcs']:
-            # verify working dirs
-            # vcs_module is the module for accessing the repo
-            if svn.is_svn(pkg):
-                vcs_module = svn
-            else:
-                if git.is_git_new_enough() and git.is_git(pkg):
-                    vcs_module = git
-            if not vcs_module:
-                raise VCSError("VCS build requested but could not determine VCS (SVN or Git) for %s" % pkg)
-
-            if not utils.is_url(pkg):
-                try:
-                    vcs_module.verify_working_dir(pkg)
-                except VCSError:
-                    log.error("VCS build requested but no usable VCS (SVN or Git) found for %s", pkg)
-                    raise
-
-            try:
-                vcs_module.verify_correct_branch(pkg, buildopts)
-            except VCSError as err:
-                if buildopts['scratch']:
-                    log.warning("\nVCS error for %s: %s\n", pkg, err, exc_info=False)
-                    log.debug("Traceback: %s", traceback.format_exc())
-                    if sys.stdin.isatty() and utils.ask_yn("Abort?"):
-                        raise
-                else:
-                    raise
-
+            scratch = buildopts["scratch"]
+            koji_targets = [
+                opts["koji_target"]
+                for opts in buildopts["targetopts_by_dver"].values()
+                if "koji_target" in opts
+            ]
+            vcs_module = get_and_verify_vcs(pkg, koji_targets, scratch)
         else:
-            is_pkg_dir(pkg)
+            verify_if_pkg_dir(pkg)
 
     #
     # Main loop
@@ -117,10 +96,6 @@ def koji_main(buildopts, package_dirs):
         for build_dver in buildopts['enabled_dvers']:
             dver_buildopts = buildopts.copy()  # type: dict
             dver_buildopts.update(buildopts['targetopts_by_dver'][build_dver])
-            if buildopts.get("repo"):
-                dver_buildopts.setdefault('koji_target', target_for_repo_hint(buildopts['repo'], build_dver))
-                dver_buildopts.setdefault('koji_tag', target_for_repo_hint(buildopts['repo'], build_dver))
-
             if not dver_buildopts.get("koji_target"):
                 raise UsageError("No koji target specified for %s on %s; you may need to specify --repo" % (pkg, build_dver))
             if not dver_buildopts.get("koji_tag"):
@@ -163,7 +138,7 @@ def main(argv=None):
 
     # verify package dirs
     for pkg in package_dirs:
-        is_pkg_dir(pkg)
+        verify_if_pkg_dir(pkg)
 
     # main loop
     for pkg in package_dirs:
@@ -172,8 +147,9 @@ def main(argv=None):
             dver_buildopts = buildopts.copy()
             dver_buildopts.update(buildopts['targetopts_by_dver'][build_dver])
             if task == "mock" and kojiinter and buildopts.get("repo"):
-                dver_buildopts.setdefault('koji_target', target_for_repo_hint(buildopts['repo'], build_dver))
-                dver_buildopts.setdefault('koji_tag', target_for_repo_hint(buildopts['repo'], build_dver))
+                hintinfo = hint_for_dver(buildopts['repo'], build_dver)
+                dver_buildopts.setdefault('koji_target', hintinfo['koji_target'])
+                dver_buildopts.setdefault('koji_tag', hintinfo['koji_tag'])
 
             mock_obj = None
             koji_obj = None
@@ -233,7 +209,48 @@ def watch_tasks_get_files(buildopts, task_ids, task_ids_by_results_dir):
                         log.info("Results and logs downloaded to %s", destdir)
 
 
-def is_pkg_dir(pkg):
+def get_and_verify_vcs(pkg: str, koji_targets: t.Sequence[str], scratch: bool):
+    """
+    Verify working dirs and return the VCS module for accessing the repo.
+
+    Args:
+        pkg: the package name to verify
+        koji_targets: the list of Koji targets to verify
+        scratch: whether the build is a scratch build
+            (and therefore branch verification may be ignored)
+
+    Returns:
+        The VCS module (`svn` or `git`) that can be used to do the build from.
+    """
+    if svn.is_svn(pkg):
+        vcs_module = svn
+    elif git.is_git_new_enough() and git.is_git(pkg):
+        vcs_module = git
+    else:
+        raise VCSError("VCS build requested but could not determine VCS (SVN or Git) for %s" % pkg)
+    if not utils.is_url(pkg):
+        try:
+            vcs_module.verify_working_dir(pkg)
+        except VCSError:
+            log.error("VCS build requested but no usable VCS (SVN or Git) found for %s", pkg)
+            raise
+    try:
+        vcs_module.verify_correct_branch(
+            package_dir=pkg,
+            koji_targets=koji_targets,
+        )
+    except VCSError as err:
+        if scratch:
+            log.warning("\nVCS error for %s: %s\n", pkg, err, exc_info=False)
+            log.debug("Traceback: %s", traceback.format_exc())
+            if sys.stdin.isatty() and utils.ask_yn("Abort?"):
+                raise
+        else:
+            raise
+    return vcs_module
+
+
+def verify_if_pkg_dir(pkg):
     if not os.path.isdir(pkg):
         raise UsageError(pkg + " isn't a directory!")
     if ((not os.path.isdir(os.path.join(pkg, "osg"))) and
@@ -241,8 +258,6 @@ def is_pkg_dir(pkg):
         raise UsageError(pkg +
                          " isn't a package directory "
                          "(must have either osg/ or upstream/ dirs or both)")
-
-
 
 
 def init(argv):
@@ -271,16 +286,33 @@ def init(argv):
     elif task == 'koji' and not kojiinter:
         raise Error('Koji plugin not found.\nInstall osg-build-koji to make the koji task available.')
 
-    buildopts = get_buildopts(options, task)
-    if buildopts['mock_config_from_koji'] and not kojiinter:
-        raise Error('Koji plugin not found.\nInstall osg-build-koji to make getting a Mock config from Koji available.')
-
-    set_loglevel(buildopts.get('loglevel', 'INFO'))
-
+    # Get the package dirs -- we'll need to know one right now to find koji.ini
+    # if there is one.
     package_dirs = args[1:]
     if not package_dirs:
         guess = guess_pkg_dir(os.getcwd())
         package_dirs.append(guess)
+
+    # Check that the directories share a prefix, so you can't try to build
+    # 23-main/foo and 24-main/foo at the same time.
+    abs_pkg_dirs = [pkg if utils.is_url(pkg) else os.path.abspath(pkg) for pkg in package_dirs]
+    prefixes = {pkg.rpartition("/")[0] for pkg in abs_pkg_dirs}
+    if len(prefixes) != 1:
+        log.error("Multiple prefixes found: %s", prefixes)
+        raise UsageError(
+            "Package directories must share a directory prefix.\n"
+            "Building into different repos from the same invocation of osg-build\n"
+            "is not currently possible; you must split up the builds into\n"
+            "separate invocations."
+        )
+
+    # There can be only one koji.ini because the prefixes match
+    buildopts = get_buildopts(options, task, local_koji_ini_path=get_local_koji_ini_path(package_dirs[0]))
+
+    if task == 'mock' and buildopts['mock_config_from_koji'] and not kojiinter:
+        raise Error('Koji plugin not found.\nInstall osg-build-koji to make getting a Mock config from Koji available.')
+
+    set_loglevel(buildopts.get('loglevel', 'INFO'))
 
     if len(package_dirs) >= BACKGROUND_THRESHOLD:
         buildopts["background"] = True
@@ -548,8 +580,7 @@ rpmbuild     Build using rpmbuild(8) on the local machine
             help="Build package directly from SVN/Git (always true for non-scratch builds)"
         )
         koji_group.add_option(
-            "--repo", action="callback",
-            callback=parser_targetopts_callback,
+            "--repo",
             type="string", dest="repo",
             help="Specify a set of repos to build to; use --repo-list to get a list"
             " of valid values for this option")
@@ -567,15 +598,16 @@ rpmbuild     Build using rpmbuild(8) on the local machine
 # end of parse_cmdline_args()
 
 
-def target_for_repo_hint(repo_hint, dver):
+def hint_for_dver(repo_hint, dver):
     hints = repo_hints(valid_koji_targets())
     if repo_hint in hints:
-        return hints[repo_hint]['target'] % {'dver': dver}
+        return {
+            'koji_target': hints[repo_hint]['target'] % {'dver': dver},
+            'koji_tag': hints[repo_hint]['tag'] % {'dver': dver},
+        }
     else:
         raise UsageError("'%s' is not a valid repo.\nValid repos are: %s" % (repo_hint, ", ".join(sorted(hints.keys()))))
 
-def tag_for_repo_hint(repo_hint, dver):
-    return repo_hints(valid_koji_targets())[repo_hint]['tag'] % {'dver': dver}
 
 def parser_targetopts_callback(option, opt_str, value, parser, *_, **__):
     """Handle options in the 'targetopts_by_dver' set, such as --koji-tag,
@@ -587,7 +619,7 @@ def parser_targetopts_callback(option, opt_str, value, parser, *_, **__):
     targetopts_by_dver['7']['koji_tag'] is the koji tag to use when building
     for EL 7.
 
-    enabled_dvers is the set of dvers to actually build for, which the
+    enabled_dvers is the list of dvers to actually build for, which the
     --el6, --el7 and --redhat-release arguments affect. dvers may also be
     implicitly turned on by other arguments, e.g. specifying
     --koji-tag=el7-foobar will implicitly turn on el7 builds.
@@ -611,30 +643,25 @@ def parser_targetopts_callback(option, opt_str, value, parser, *_, **__):
 
     # We also have enabled_dvers for determining which dvers to build for.
     if not getattr(parser.values, 'enabled_dvers', None):
-        parser.values.enabled_dvers = set()
+        parser.values.enabled_dvers = []
     enabled_dvers = parser.values.enabled_dvers
 
     if value is None:
         value = ''
     if opt_name == 'redhat_release':
-        for dver in DVERS:
-            if opt_str == '--'+dver:
-                enabled_dvers.add(dver)
         if opt_str == '--redhat-release':
-            if 'el' + value in DVERS:
-                enabled_dvers.add('el' + value)
-            else:
-                raise OptionValueError("Invalid redhat release value: %r" % value)
+            dver = "el" + value
+        else:
+            dver = opt_str.lstrip("-")
+        if dver in DVERS:
+            if dver not in enabled_dvers:
+                enabled_dvers.append(dver)
+        else:
+            raise OptionValueError("Invalid distro version %s" % dver)
     elif opt_name == 'koji_tag' and value == 'TARGET': # HACK
         assert kojiinter  # shouldn't get here without kojiinter
         for dver in targetopts_by_dver:
             targetopts_by_dver[dver]['koji_tag'] = 'TARGET'
-    elif opt_str == '--repo':
-        assert kojiinter  # shouldn't get here without kojiinter
-        parser.values.repo = value
-        for dver in DVERS:
-            targetopts_by_dver[dver]['koji_target'] = target_for_repo_hint(value, dver)
-            targetopts_by_dver[dver]['koji_tag'] = tag_for_repo_hint(value, dver)
     else:
         dver = utils.get_dver_from_string(value)
 
@@ -642,7 +669,7 @@ def parser_targetopts_callback(option, opt_str, value, parser, *_, **__):
             raise OptionValueError('Unable to determine redhat release in parameter %r: %r' % (opt_str, value))
 
         if dver not in enabled_dvers:
-            enabled_dvers.add(dver)
+            enabled_dvers.append(dver)
             log.debug("Implicitly enabled building for el%s due to %r argument %r" % (dver, opt_str, value))
 
         if opt_name == 'ktt':
@@ -653,7 +680,6 @@ def parser_targetopts_callback(option, opt_str, value, parser, *_, **__):
         if not verify_release_in_targetopts_by_dver(targetopts_by_dver[dver]):
             raise OptionValueError('Inconsistent redhat release in parameter %s: %s' % (opt_str, value))
 # end of parser_targetopts_callback()
-
 
 
 def get_task(args):
@@ -682,7 +708,7 @@ def get_task(args):
 # end of get_task()
 
 
-def get_buildopts(options, task):
+def get_buildopts(options, task, local_koji_ini_path):
     """Return a dict of the build options to use, based on the
     command-line arguments.
 
@@ -722,19 +748,22 @@ def get_buildopts(options, task):
         for dver in DVERS:
             buildopts['targetopts_by_dver'][dver] = DEFAULT_BUILDOPTS_BY_DVER[dver].copy()
 
-    # Which distro versions are we building for? If not specified on the
-    # command line, either build for all (koji) or the dver of the local machine
-    # (others)
-    enabled_dvers = getattr(options, 'enabled_dvers', None)
-    if not enabled_dvers:
-        if task == 'koji':
-            if buildopts['repo'] in DEFAULT_DVERS_BY_REPO:
-                buildopts['enabled_dvers'] = set(DEFAULT_DVERS_BY_REPO[buildopts['repo']])
-            else:
-                buildopts['enabled_dvers'] = set(DEFAULT_DVERS)
-        else:
-            machine_dver = utils.get_local_machine_dver() or FALLBACK_DVER
-            buildopts['enabled_dvers'] = {machine_dver}
+    # Read and merge koji.ini. Even if we're not doing the 'koji' task, we
+    # might use the settings from this for the 'mock' task (if we're taking the
+    # mock config from koji).
+    if local_koji_ini_path is not None:
+        ini_buildopts = (read_local_koji_ini(local_koji_ini_path)) or {}
+        for key, value in ini_buildopts.items():
+            if buildopts.get(key, None) is None:
+                buildopts[key] = value
+
+    if not buildopts.get("enabled_dvers", None):
+        buildopts["enabled_dvers"] = get_enabled_dvers(task, buildopts.get("repo", ""))
+
+    # Cleanup: remove targetopts for dvers we are not building for
+    for key in list(buildopts['targetopts_by_dver'].keys()):
+        if key not in buildopts['enabled_dvers']:
+            del buildopts['targetopts_by_dver'][key]
 
     if task == "koji":
         assert kojiinter, "kojiinter necessary for 'koji' task -- this should have been caught"
@@ -751,6 +780,42 @@ def get_buildopts(options, task):
 
     return buildopts
 # end of get_buildopts()
+
+
+def get_local_koji_ini_path(package_dir: str) -> t.Optional[Path]:
+    package_path = Path(guess_pkg_dir(package_dir))
+    local_koji_ini_path = package_path / ".." / LOCAL_KOJI_INI
+    if local_koji_ini_path.is_file():
+        return local_koji_ini_path
+    else:
+        return None
+
+
+def read_local_koji_ini(local_koji_ini_path) -> t.Dict:
+    cp = configparser.ConfigParser()
+    cp.read(local_koji_ini_path)
+    new_buildopts = {}
+    if "koji" not in cp.sections():
+        return {}
+    known_opts = ["repo"]
+    sec = cp["koji"]
+    for opt in known_opts:
+        if opt in sec:
+            new_buildopts[opt] = sec[opt]
+    return new_buildopts
+
+
+def get_enabled_dvers(task: str, repo: str = "") -> t.List[str]:
+    """
+    Get which distro versions we building for, if they have not been specified
+    on the command line.
+
+    This depends on the task -- for the koji task, build for all dvers supported
+    by the target.  For all other tasks, use the dver of the local machine.
+    """
+    if task != "koji":
+        return [utils.get_local_machine_dver() or FALLBACK_DVER]
+    return DEFAULT_DVERS_BY_REPO.get(repo, DEFAULT_DVERS)
 
 
 def print_version_and_exit():

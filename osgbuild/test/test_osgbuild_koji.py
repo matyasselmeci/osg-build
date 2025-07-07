@@ -6,9 +6,16 @@ import pwd
 import unittest
 from unittest import TestCase
 
-import osgbuild.constants as C
-from osgbuild import main, svn
-from osgbuild.test.common import OSG_23_MAIN, OSG_36, common_setUp, backtick_osg_build, regex_in_list, checked_osg_build
+from osgbuild import main, svn, target_protection
+from osgbuild.test.common import (
+    OSG_23_MAIN,
+    OSG_24_MAIN,
+    OSG_36,
+    backtick_osg_build,
+    checked_osg_build,
+    common_setUp,
+    regex_in_list,
+)
 from osgbuild.utils import CalledProcessError, errprintf
 
 
@@ -30,14 +37,14 @@ class TestKoji(TestCase):
                 re.search(self.build_target_shell_regex % target, output, re.MULTILINE))
 
     def test_koji_shell_args1(self):
-        output = backtick_osg_build(self.kdr_shell + ["--scratch", self.pkg_dir])
+        output = backtick_osg_build(self.kdr_shell + ["--scratch", self.pkg_dir, "--repo", "23-main"])
         self.assertTrue(self.is_building_for("osg.+el8", output),
                         "not building for el8")
         self.assertTrue(self.is_building_for("osg.+el9", output),
                         "not building for el9")
 
     def test_koji_shell_args2(self):
-        output = backtick_osg_build(self.kdr_shell + ["--el9", "--scratch", self.pkg_dir])
+        output = backtick_osg_build(self.kdr_shell + ["--el9", "--scratch", self.pkg_dir, "--repo", "23-main"])
         self.assertFalse(self.is_building_for("osg.+el8", output),
                          "falsely building for el8")
         self.assertTrue(self.is_building_for("osg.+el9", output),
@@ -60,7 +67,7 @@ class TestKoji(TestCase):
             "Bad error with --koji-tag=TARGET")
 
     def test_koji_lib_args1(self):
-        output = backtick_osg_build(self.kdr_lib + ["--scratch", self.pkg_dir])
+        output = backtick_osg_build(self.kdr_lib + ["--scratch", self.pkg_dir, "--repo", "23-main"])
         out_list = output.split("\n")
         self.assertTrue(
             regex_in_list(r".*kojisession.build\([^,]+?, 'osg.+el[89]', " + re.escape("{'scratch': True}") + r", None\)", out_list))
@@ -69,10 +76,11 @@ class TestKoji(TestCase):
         try:
             _ = backtick_osg_build(self.kdr_lib + ["--repo", "3.6-upcoming", "--dry-run", opj(svn.SVN_ROOT, OSG_23_MAIN, "osg-xrootd")])
         except CalledProcessError as err:
-            out_list = err.output.split("\n")
-            self.assertTrue(
-                regex_in_list(r".*Forbidden to build from .+ branch into .+ target", out_list),
-                "did not detect attempt to build for wrong branch (wrong error message)")
+            self.assertIn(
+                "branch/target mismatch:",
+                err.output,
+                "did not detect attempt to build for wrong branch"
+            )
             return
         self.fail("did not detect attempt to build for wrong branch (no error message)")
 
@@ -80,13 +88,15 @@ class TestKoji(TestCase):
         try:
             # SCM URI format is 'git+https://host/.../repo.git?path#revision'
             gitbranch = re.sub(r"^native/redhat/branches/", "", OSG_36)
-            scm_uri = "git+%s?%s#%s" % (C.OSG_REMOTE, "osg-xrootd", gitbranch)
+            osg_unauth_remote = target_protection.REMOTES["osg"].unauth
+            scm_uri = "git+%s?%s#%s" % (osg_unauth_remote, "osg-xrootd", gitbranch)
             _ = backtick_osg_build(self.kdr_lib + ["--repo", "3.6-upcoming", "--dry-run", scm_uri])
         except CalledProcessError as err:
-            out_list = err.output.split("\n")
-            self.assertTrue(
-                regex_in_list(r".*Forbidden to build from .+ branch into .+ target", out_list),
-                "did not detect attempt to build for wrong branch (wrong error message)")
+            self.assertIn(
+                "branch/target mismatch:",
+                err.output,
+                "did not detect attempt to build for wrong branch"
+            )
             return
         self.fail("did not detect attempt to build for wrong branch (no error message)")
 
@@ -154,8 +164,8 @@ class TestMock(TestCase):
     """Tests for mock"""
 
     def setUp(self):
-        self.pkg_dir = common_setUp(opj(OSG_36, "osg-ce"),
-                                    "{2023-07-21}")
+        self.pkg_dir = common_setUp(opj(OSG_24_MAIN, "osg-ca-certs"),
+                                    "{2025-05-01}")
 
     @staticmethod
     def check_for_mock_group():
@@ -175,7 +185,7 @@ class TestMock(TestCase):
 
     def test_mock_koji_cfg(self):
         if self.check_for_mock_group():
-            checked_osg_build(["mock", self.pkg_dir, "--el9", "--mock-config-from-koji=osg-3.6-el9-build"])
+            checked_osg_build(["mock", self.pkg_dir, "--el9", "--mock-config-from-koji=osg-23-main-el9-build"])
 
 
 if __name__ == '__main__':

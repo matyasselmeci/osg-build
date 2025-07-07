@@ -259,6 +259,15 @@ class TestFetch(TestCase):
 class TestMisc(TestCase):
     """Other tests"""
 
+    def test_constants(self):
+        self.assertIn(C.FALLBACK_DVER, C.DVERS)
+        for _d in C.DEFAULT_DVERS:
+            self.assertIn(_d, C.DVERS)
+        for _ds in C.DEFAULT_DVERS_BY_REPO.values():
+            for _d in _ds:
+                self.assertIn(_d, C.DVERS)
+                assert _d in C.DVERS
+
     def test_rpmbuild_defines(self):
         buildopts_el = dict()
         build_el = dict()
