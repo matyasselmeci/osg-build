@@ -228,7 +228,7 @@ def get_current_branch_remote(package_dir):
 
 def is_uncommitted(package_dir):
     """Return True if there are uncommitted changes or files in the git working dir."""
-    out, err = run_git_cmd(package_dir, "status", "--porcelain")
+    out, err = run_git_cmd(package_dir, "status", "--porcelain", ".")
     if err:
         raise VCSError("Exit code %d getting git status for directory %s. Output:\n%s" % (err, package_dir, out))
     if out:
