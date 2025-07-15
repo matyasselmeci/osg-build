@@ -8,7 +8,7 @@
 %global _release 1
 
 Name:           osg-build
-Version:        1.99.5
+Version:        2.0.0
 Release:        %{?betatag:0.}%{_release}%{?betatag}%{?dist}
 Summary:        Build tools for the OSG
 
@@ -37,7 +37,9 @@ See %{url} for details.
 %package base
 Requires:       git-core
 Requires:       rpm-build
+%if 0%{?el} < 10
 Requires:       quilt
+%endif
 Requires:       rpmlint
 Requires:       subversion
 Requires:       wget
@@ -66,8 +68,8 @@ Summary:        OSG-Build Mock plugin, allows builds with mock
 %package koji
 Requires:       %{name}-base = %{version}
 Requires:       openssl
-Requires:       koji >= 1.21.0
-Requires:       voms-clients-cpp
+Requires:       koji >= 1.33.0
+Requires:       krb5-workstation
 Summary:        OSG-Build Koji plugin and Koji-based tools
 
 %description koji
@@ -129,6 +131,7 @@ fi
 %{python_sitelib}/osgbuild/main.py*
 %{python_sitelib}/osgbuild/srpm.py*
 %{python_sitelib}/osgbuild/svn.py*
+%{python_sitelib}/osgbuild/target_protection.py*
 %{python_sitelib}/osgbuild/utils.py*
 %{python_sitelib}/osgbuild/version.py*
 %{_datadir}/%{name}/rpmlint.cfg
@@ -150,6 +153,12 @@ fi
 
 
 %changelog
+* Tue Jul 15 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 2.0.0-1
+- Add support for building from https://github.com/osg-htc/software-packaging.git (SOFTWARE-6078)
+- Koji builds can determine --repo based on a 'koji.ini' file from the branch directory (SOFTWARE-6066)
+- Add support for EL10 (SOFTWARE-6165)
+- Require krb5-workstation instead of voms-clients-cpp because we now use Kerberos auth
+
 * Tue May 06 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 1.99.5-1
 - Download upstream sources from the new server https://sw-upstream.svc.osg-htc.org, falling back to https://vdt.cs.wisc.edu on failure (SOFTWARE-6106)
 - Drop the "AFS cache prefix" -- upstream sources are always downloaded via HTTP(S), even if AFS is locally mounted
@@ -159,14 +168,14 @@ fi
 - Disable the --3.5-upcoming and --3.6-upcoming args
 - Bug fix: don't specify a --tag when git cloning from HEAD
 
-* Thu Oct 19 2023 Mátyás Selmeci <matyas@cs.wisc.ed - 1.99.2-0.1.pre
+* Thu Oct 19 2023 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.99.2-0.1.pre
 - Reorganize code to make it pip installable
 - Add package signing script (SOFTWARE-5637)
 
-* Thu Oct 12 2023 Mátyás Selmeci <matyas@cs.wisc.ed - 1.99.1-0.2.pre
+* Thu Oct 12 2023 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.99.1-0.2.pre
 - Use list-history instead of list-tag-history in koji-blame to work with koji cli 1.24+ (SOFTWARE-4532)
 
-* Wed Oct 11 2023 Mátyás Selmeci <matyas@cs.wisc.edu- 1.99.1-0.1.pre
+* Wed Oct 11 2023 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.99.1-0.1.pre
 - Add Kerberos support (SOFTWARE-5696)
 
 * Thu Sep 29 2023 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.99.0-0.2.pre
@@ -326,43 +335,43 @@ fi
 - Rename koji-hub.batlab.org to koji.chtc.wisc.edu (SOFTWARE-2175)
 - Do not enforce vcs branch checks for scratch builds (SOFTWARE-1876)
 
-* Tue Apr 12 2016 Matyas Selmeci <matyas@cs.wisc.edu> 1.6.3-1
+* Tue Apr 12 2016 Matyas Selmeci <matyas@cs.wisc.edu> - 1.6.3-1
 - include CILogon-OSG CA cert in CA bundle created by `osg-koji setup' (SOFTWARE-2273)
 
-* Fri Feb 19 2016 Mátyás Selmeci <matyas@cs.wisc.edu> 1.6.2-1
+* Fri Feb 19 2016 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.6.2-1
 - Change osg-promote table layout to put build first (SOFTWARE-2116)
 
-* Mon Aug 17 2015 Mátyás Selmeci <matyas@cs.wisc.edu> 1.6.1-1
+* Mon Aug 17 2015 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.6.1-1
 - Change promotion aliases testing, prerelease, and contrib to point to 3.3 instead of 3.2
 - Fix unit tests to work with new default dvers
 - Drop upstreamed patches
 
-* Wed Aug 12 2015 Mátyás Selmeci <matyas@cs.wisc.edu> 1.6.0-3
+* Wed Aug 12 2015 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.6.0-3
 - Change default dvers for building out of trunk to be el6 and el7 (instead of el5 and el6)
 
-* Tue Aug 04 2015 Mátyás Selmeci <matyas@cs.wisc.edu> 1.6.0-2
+* Tue Aug 04 2015 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.6.0-2
 - Change default dvers for upcoming* promotion routes to be el6 and el7 (instead of el5 and el6)
 
-* Thu Jul 30 2015 Mátyás Selmeci <matyas@cs.wisc.edu> 1.6.0-1
+* Thu Jul 30 2015 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.6.0-1
 - Add promotion routes for goc repos (SOFTWARE-1969)
 - Read promotion route definitions from an ini file instead of guessing from available Koji tags
 - Fix promotion problems for repos with different supported dvers (SOFTWARE-1988)
 - Fix promotion route for contrib to go from development instead of testing
 
-* Wed Jul 08 2015 Mátyás Selmeci <matyas@cs.wisc.edu> 1.5.0-3
+* Wed Jul 08 2015 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.5.0-3
 - Fix ambiguity with 'upcoming' promotion route
 
-* Tue Jul 07 2015 Mátyás Selmeci <matyas@cs.wisc.edu> 1.5.0-2
+* Tue Jul 07 2015 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.5.0-2
 - Allow promotion to upcoming-prerelease for osg-promote
 
-* Thu Jul 02 2015 Mátyás Selmeci <matyas@cs.wisc.edu> 1.5.0-1
+* Thu Jul 02 2015 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.5.0-1
 - Build for el6 and el7 for OSG 3.3 by default (instead of el5 and el6) (SOFTWARE-1902)
 - Allow promotion to prerelease for osg-promote
 
-* Thu Apr 23 2015 Mátyás Selmeci <matyas@cs.wisc.edu> 1.4.4-2
+* Thu Apr 23 2015 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.4.4-2
 - Fix missing import (SOFTWARE-1870)
 
-* Wed Apr 1 2015 Mátyás Selmeci <matyas@cs.wisc.edu> 1.4.4-1
+* Wed Apr 1 2015 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.4.4-1
 - Add log line with destination SRPM path for osg-build prebuild
 - Increase max retries for watching koji tasks
 - Actually ignore target-arch on non-scratch builds
@@ -370,31 +379,31 @@ fi
 - Add some hackery to keep osg-promote working even after the 3.3 tags have
   been created
 
-* Wed Dec 17 2014 Mátyás Selmeci <matyas@cs.wisc.edu> 1.4.3-1
+* Wed Dec 17 2014 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.4.3-1
 - Add retry loop to watching tasks (SOFTWARE-1343)
 - Allow --target-arch option on scratch koji builds (SOFTWARE-1629)
 - Handle mixed git/svn directories (SOFTWARE-1247)
 - Update usage text
 
-* Mon Dec 01 2014 Mátyás Selmeci <matyas@cs.wisc.edu> 1.4.2-1
+* Mon Dec 01 2014 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.4.2-1
 - Don't require a cert when doing a mock build using a koji config
 - Change contrib promotion route to go from testing to contrib instead of
   development to contrib (SOFTWARE-1682)
 - Use current dir as package dir if not specified (SOFTWARE-1424)
 
-* Tue Sep 30 2014 Matyas Selmeci <matyas@cs.wisc.edu> 1.4.1-1
+* Tue Sep 30 2014 Matyas Selmeci <matyas@cs.wisc.edu> - 1.4.1-1
 - Do not promote EL7 unless --el7 flag is passed (SOFTWARE-1586)
 - Add --background option for koji builds to lower priority (SOFTWARE-1609)
 - Exit nonzero if watched builds fail
 
-* Mon Aug 11 2014 Mátyás Selmeci <matyas@cs.wisc.edu> 1.4.0-1
+* Mon Aug 11 2014 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.4.0-1
 - EL7 support
 - Removed koji-tag-checker
 
 * Mon Jun 23 2014 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.3.8-1
 - Add koji-blame, a tool for listing koji tagging history (SOFTWARE-1113)
 
-* Tue May 6 2014 Mátyás Selmeci <matyas@cs.wisc.edu> 1.3.7-2
+* Tue May 6 2014 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.3.7-2
 - Fix race conditions in osg-koji setup (SOFTWARE-1466)
 
 * Mon Apr 7 2014 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.3.6-1
@@ -402,7 +411,7 @@ fi
 - Tweak client.crt creation in osg-koji setup to insert newline between cert
   and key and convert line endings
 
-* Fri Mar 21 2014 Mátyás Selmeci <matyas@cs.wisc.edu> 1.3.5-2
+* Fri Mar 21 2014 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.3.5-2
 - Allow multiple routes separated by commas in '-r', for osg-promote
   and fix usage message (SOFTWARE-1390)
 - Add repo hints for 'condor' and 'perfsonar' repos (SOFTWARE-1413, SOFTWARE-1392)
@@ -417,10 +426,7 @@ fi
 - change 'contrib' promotion path to go from development -> contrib instead
   of testing -> contrib, per the new osg-contrib policy  (SOFTWARE-1405)
 
-* Fri Feb 14 2014 Mátyás Selmeci <matyas@cs.wisc.edu> 1.3.3-3.untagme
-- Add koji-hub-testing.patch
-
-* Mon Jan 27 2014 Matyas Selmeci <matyas@cs.wisc.edu> 1.3.3-2
+* Mon Jan 27 2014 Matyas Selmeci <matyas@cs.wisc.edu> - 1.3.3-2
 - Make client cert check Python 2.4-compatible (SOFTWARE-1366)
 - Allow simultaneous promotions to multiple routes (e.g. both 3.1-testing and 3.2-testing) in osg-promote (SOFTWARE-1289)
 - Refactoring and unit tests for osg-promote
