@@ -13,7 +13,7 @@ Release:        %{?betatag:0.}%{_release}%{?betatag}%{?dist}
 Summary:        Build tools for the OSG
 
 License:        Apache 2.0
-URL:            https://github.com/opensciencegrid/osg-build
+URL:            https://github.com/osg-htc/osg-build
 
 Source0:        %{name}-%{version}.tar.gz
 
@@ -37,9 +37,8 @@ See %{url} for details.
 %package base
 Requires:       git-core
 Requires:       rpm-build
-%if 0%{?el} < 10
-Requires:       quilt
-%endif
+# quilt is not (yet) available on EL10
+Recommends:     quilt
 Requires:       rpmlint
 Requires:       subversion
 Requires:       wget
@@ -158,6 +157,7 @@ fi
 - Koji builds can determine --repo based on a 'koji.ini' file from the branch directory (SOFTWARE-6066)
 - Add support for EL10 (SOFTWARE-6165)
 - Require krb5-workstation instead of voms-clients-cpp because we now use Kerberos auth
+- Turn quilt into a soft dependency because it is not yet available on EL10
 
 * Tue May 06 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 1.99.5-1
 - Download upstream sources from the new server https://sw-upstream.svc.osg-htc.org, falling back to https://vdt.cs.wisc.edu on failure (SOFTWARE-6106)
