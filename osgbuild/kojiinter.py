@@ -229,12 +229,19 @@ class KojiShellInter(object):
         Check if we have a ticket for the desired Kerberos principal (if we know it and we're using Kerberos);
         if not, use kinit to get a new one.
         """
+        # TODO If we kswitch, switch back afterwards. Maybe make this method a contextmanager
         principal = getattr(self, "principal", "")
         if getattr(self, "authtype", DEFAULT_AUTHTYPE) == "kerberos" and principal:
-            if not credhelper.krb_check_principal(principal):
+            if credhelper.krb_check_principal(principal):
+                if credhelper.krb_get_default_principal() != principal:
+                    log.info("Switching default principal to %s", principal)
+                    if not credhelper.krb_kswitch(principal):
+                        log.warning("Switching principal to %s failed; auth may not work", principal)
+            else:
                 log.info("No valid credential for principal %s; calling kinit to get a new one" % principal)
                 if not credhelper.krb_kinit(principal):
                     raise KojiError("Kerberos authtype selected but can't get a valid credential")
+
 
     def login_to_koji(self):
         log.info("Logging in to koji using %s auth", self.authtype)

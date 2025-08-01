@@ -2,6 +2,7 @@ import re
 import os
 import subprocess
 import time
+from typing import Optional
 
 from datetime import datetime
 from .error import ClientCertError
@@ -79,7 +80,33 @@ class ClientCert(object):
             raise ClientCertError(self.filename, "cert not valid yet")
 
 
-def krb_check_principal(principal: str) -> bool:
+def krb_get_default_principal() -> Optional[str]:
+    """
+    Return the default principal if there is one.
+
+    Returns:
+        The default principal, as a string, if there is one; otherwise, None.
+    """
+    try:
+        proc = subprocess.run(
+            ["klist", "-s"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=True
+        )
+        for line in proc.stdout.splitlines():
+            if not line.startswith(b"Default principal: "):
+                continue
+            principal = line.split(b": ", 1)[1].encode()
+            return principal
+        else:
+            return None
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+
+
+def krb_check_principal(principal: str) -> Optional[str]:
     """
     Return True if we have a valid ticket for the given Kerberos principal,
     False otherwise.
@@ -99,6 +126,29 @@ def krb_check_principal(principal: str) -> bool:
                 return True
         else:
             return False
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return False
+
+
+def krb_kswitch(principal: str) -> bool:
+    """
+    Run kswitch to switch the default principal to the given one.
+
+    Args:
+        principal: The Kerberos principal to switch to
+
+    Returns:
+        True if successful, False otherwise.
+    """
+    try:
+        proc = subprocess.run(
+            ["kswitch", "-p", principal],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=True
+        )
+        return True
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return False
 

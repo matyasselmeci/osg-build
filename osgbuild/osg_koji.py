@@ -394,6 +394,7 @@ You may need to run `kinit` before running the above command.
                     authtype = koji_config.get("koji", "authtype")
                 except configparser.NoOptionError:
                     authtype = DEFAULT_AUTHTYPE
+                # TODO Get Kerberos principal if necessary?
                 args = ["--config=" + koji_config_path,
                         "--authtype=%s" % authtype] + argv[1:]
                 return run_koji(args=args, use_exec=use_exec)
