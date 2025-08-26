@@ -98,7 +98,7 @@ def krb_get_default_principal() -> Optional[str]:
         for line in proc.stdout.splitlines():
             if not line.startswith(b"Default principal: "):
                 continue
-            principal = line.split(b": ", 1)[1].encode()
+            principal = line.split(b": ", 1)[1].decode()
             return principal
         else:
             return None
