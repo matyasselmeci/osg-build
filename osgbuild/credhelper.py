@@ -106,7 +106,7 @@ def krb_get_default_principal() -> Optional[str]:
         return None
 
 
-def krb_check_principal(principal: str) -> Optional[str]:
+def krb_check_principal(principal: str) -> bool:
     """
     Return True if we have a valid ticket for the given Kerberos principal,
     False otherwise.
