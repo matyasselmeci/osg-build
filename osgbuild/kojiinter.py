@@ -644,18 +644,39 @@ class KojiLibInter(object):
         else:
             log.info("self.kojisession.newRepo(%r)", tag)
 
+    @staticmethod
+    def _ki_handler(progname, tasks, quiet):
+        # Handles keyboard interrupts. Overrides koji's default ki_handler to
+        # give the correct program name in the instructions.
+        _ = progname
+        if not quiet:
+            tlist = ['%s: %s' % (t.str(), t.display_state(t.info, level=t.level))
+                     for t in tasks.values() if not t.is_done()]
+            print(
+                "Tasks still running. You can continue to watch with the"
+                " 'osg-koji watch-task --mine' command.\n"
+                "Running Tasks:\n%s" % ('\n'.join(tlist)))
 
     @koji_error_wrap('watching tasks')
     def watch_tasks(self, tasks):
-        return kojicli.watch_tasks(self.kojisession, tasks, poll_interval=15)
-
+        return kojicli.watch_tasks(
+            self.kojisession,
+            tasks,
+            poll_interval=15,
+            ki_handler=self._ki_handler
+        )
 
     @koji_error_wrap('watching tasks')
     def watch_tasks_with_retry(self, tasks, max_retries=20, retry_interval=20):
         tries = 0
         while True:
             try:
-                return kojicli.watch_tasks(self.kojisession, tasks, poll_interval=15)
+                return kojicli.watch_tasks(
+                    self.kojisession,
+                    tasks,
+                    poll_interval=15,
+                    ki_handler=self._ki_handler
+                )
             except kojilib.ServerOffline as err:
                 # these have a large chance of being bogus
                 log.info("Got error from server: %s", err)
@@ -665,7 +686,6 @@ class KojiLibInter(object):
                     time.sleep(retry_interval)
                 else:
                     raise
-
 
     @koji_error_wrap('downloading results')
     def download_results(self, task_ids, destdir):
