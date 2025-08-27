@@ -1,5 +1,6 @@
-import re
+import logging
 import os
+import re
 import subprocess
 import time
 from typing import Optional
@@ -7,6 +8,9 @@ from typing import Optional
 from datetime import datetime
 from .error import ClientCertError
 from . import utils
+
+
+_log = logging.getLogger(__name__)
 
 
 class ClientCert(object):
@@ -161,10 +165,10 @@ def krb_kinit(principal: str, timeout: int = 180) -> bool:
     try:
         subprocess.check_call(["kinit", principal], timeout=timeout)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        print("Unable to get new kerberos credential for principal %s" % principal)
+        _log.warning("Unable to get new kerberos credential for principal %s", principal)
         return False
     if krb_check_principal(principal):
         return True
     else:
-        print("Unable to validate new kerberos credential for principal %s" % principal)
+        _log.warning("Unable to validate new kerberos credential for principal %s", principal)
         return False
