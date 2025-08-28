@@ -1,29 +1,26 @@
 #!/usr/bin/env python3
 
+import argparse
+import enum
 import glob
 import logging
 import re
-from optparse import OptionParser
 import os
-from shlex import quote as shell_quote
+import shlex
 import shutil
 import sys
 import traceback
 from typing import Tuple
 
 from osgbuild import fetch_sources
+from osgbuild import git
+from osgbuild import svn
 from osgbuild import utils
+from osgbuild.error import Error, UsageError
 
 # Constants:
-VDT_WWW = "/p/vdt/public/html"
-DEFAULT_UPSTREAM_ROOT = os.path.join(VDT_WWW, "upstream")
-DEFAULT_LOG_LEVEL = logging.INFO
-
-
-EXTRA_ACTION_DIFF_SPEC = 'diff_spec'
-EXTRA_ACTION_EXTRACT_SPEC = 'extract_spec'
-EXTRA_ACTION_DIFF3_SPEC = 'diff3_spec'
-EXTRA_ACTION_UPDATE = 'update'
+DEFAULT_UPSTREAM_ROOT = "/osgsw/upstream"
+OLD_DEFAULT_UPSTREAM_ROOT = "/p/vdt/public/html/upstream"
 
 # fmt: off
 PROVIDER_PATTERNS = [
@@ -39,26 +36,24 @@ PROVIDER_PATTERNS = [
 # fmt: on
 
 
-class Error(Exception):
-    """Base class for expected exceptions. Caught in main(); may include a
-    traceback but will only print it if debugging is enabled.
+class ExtraAction(enum.Enum):
+    NOTHING = "nothing"
+    DIFF_SPEC = "diff_spec"
+    EXTRACT_SPEC = "extract_spec"
+    DIFF3_SPEC = "diff3_spec"
+    UPDATE = "update"
 
-    """
-    def __init__(self, msg, tb=None):
-        self.msg = msg
-        if tb is None:
-            self.traceback = traceback.format_exc()
-
-    def __repr__(self):
-        return repr((self.msg, self.traceback))
-
-    def __str__(self):
-        return str(self.msg)
+    def __bool__(self):
+        return self.value != "nothing"
 
 
-class UsageError(Error):
-    def __init__(self, msg):
-        Error.__init__(self, "Usage error: " + msg + "\n")
+class VcsType(enum.Enum):
+    NONE = "none"
+    SVN = "svn"
+    GIT = "git"
+
+    def __bool__(self):
+        return self.value != "none"
 
 
 def verify_rpm(srpm):
@@ -81,13 +76,33 @@ def srpm_nv(srpm: str) -> Tuple[str, str]:
     raise Error("Unable to extract name and version from SRPM %s: %s" % (srpm, output))
 
 
-def make_svn_tree(srpm, url, dirname=None, extra_action=None, provider=None, sha1sum=None, svn=True):
-    """Create an svn tree for the srpm and populate it as follows:
+def make_repo_subtree(
+        srpm: str,
+        url: str,
+        sha1sum: str,
+        dirname: str = "",
+        extra_action: ExtraAction = ExtraAction.NOTHING,
+        provider: str = "",
+        vcs: VcsType = VcsType.NONE
+):
+    """
+    Create a subtree in the packaging repo for the srpm and populate it as follows:
     $name/osg/*.spec        - the spec file as extracted from the srpm
                               (if extract_spec is True)
     $name/upstream/*.source - the location of the srpm under the upstream cache
                               as well as a comment describing where it's from
 
+    Args:
+        srpm: The path of the existing SRPM file to extract version information from
+        url: The upstream URL the SRPM file was downloaded from
+        sha1sum: the sha1sum of the SRPM
+        dirname (optional): the subdirectory to create (otherwise,
+            will use the SRPM's name)
+        extra_action (optional): an extra action to perform after
+            downloading the SRPM
+        provider (optional): the name of the provider to use in the name of the
+            .source file
+        vcs (optional): what type of VCS (SVN or Git) operations to run
     """
     name, version = srpm_nv(srpm)
     if not dirname:
@@ -99,21 +114,21 @@ def make_svn_tree(srpm, url, dirname=None, extra_action=None, provider=None, sha
         package_dir = os.path.join(package_dir, dirname)
 
     if not os.path.exists(package_dir):
-        if svn:
+        if vcs == VcsType.SVN:
             utils.checked_call(["svn", "mkdir", package_dir])
         else:
             os.mkdir(package_dir)
 
     osg_dir = os.path.join(package_dir, "osg")
-    if extra_action == EXTRA_ACTION_DIFF_SPEC:
+    if extra_action == ExtraAction.DIFF_SPEC:
         diff_spec(abs_srpm, osg_dir, want_diff3=False)
-    elif extra_action == EXTRA_ACTION_EXTRACT_SPEC:
-        extract_spec(abs_srpm, osg_dir, svn=svn)
-    elif extra_action == EXTRA_ACTION_DIFF3_SPEC:
+    elif extra_action == ExtraAction.EXTRACT_SPEC:
+        extract_spec(abs_srpm, osg_dir, vcs)
+    elif extra_action == ExtraAction.DIFF3_SPEC:
         if os.path.isdir(osg_dir):
             extract_orig_spec(osg_dir)
         diff_spec(abs_srpm, osg_dir, want_diff3=True)
-    elif extra_action == EXTRA_ACTION_UPDATE:
+    elif extra_action == ExtraAction.UPDATE:
         if os.path.isdir(osg_dir):
             logging.info("osg dir found -- doing 3-way diff")
             extract_orig_spec(osg_dir)
@@ -124,44 +139,56 @@ def make_svn_tree(srpm, url, dirname=None, extra_action=None, provider=None, sha
     upstream_dir = os.path.join(package_dir, "upstream")
 
     if not os.path.exists(upstream_dir):
-        if svn:
+        if vcs == VcsType.SVN:
             utils.checked_call(["svn", "mkdir", upstream_dir])
         else:
             os.mkdir(upstream_dir)
 
     cached_filename = os.path.join(name, version, os.path.basename(srpm))
 
-    make_source_file(url, cached_filename, upstream_dir, provider, sha1sum, svn=svn)
+    make_source_file(
+        url,
+        cached_filename,
+        upstream_dir,
+        provider or get_provider(url),
+        sha1sum,
+        vcs,
+    )
 
     if len(glob.glob(os.path.join(upstream_dir, "*.source"))) > 1:
         logging.info("More than one .source file found in upstream dir.")
         logging.info("Examine them to make sure there aren't duplicates.")
 
 
-def make_source_file(url: str,
-                     cached_filename: str,
-                     upstream_dir: str,
-                     provider: str = None,
-                     sha1sum: str = None,
-                     svn=True):
-    """Create an upstream/*.source file with the appropriate name based
-    on either `provider` or `url` if the former is not given.  Also add
-    the new file to SVN.
+def get_provider(url: str) -> str:
     """
-    if provider is None:
-        for provpat, provname in PROVIDER_PATTERNS:
-            if re.search(provpat, url):
-                provider = provname
-                break
-        else:
-            provider = 'developer'
-
-    source_filename = os.path.join(upstream_dir, provider+".srpm.source")
-    if sha1sum:
-        srcspec = "{cached_filename} sha1sum={sha1sum}".format(**locals())
+    Match the given url against the PROVIDER_PATTERNS and return the first one.
+    """
+    for provpat, provname in PROVIDER_PATTERNS:
+        if re.search(provpat, url):
+            return provname
     else:
-        srcspec = cached_filename
-    source_contents = "{srcspec}\n# Downloaded from {url}\n".format(**locals())
+        return "developer"
+
+
+def make_source_file(
+    url: str,
+    cached_filename: str,
+    upstream_dir: str,
+    provider: str,
+    sha1sum: str,
+    vcs: VcsType = VcsType.NONE,
+):
+    """
+    Create an upstream/*.source file with the appropriate name based
+    on either `provider` or `url` if the former is not given.  Also add
+    the new file to version control if possible.
+    """
+    source_filename = os.path.join(upstream_dir, provider+".srpm.source")
+    source_contents = f"""\
+{cached_filename} sha1sum={sha1sum}
+# Downloaded from {url}
+"""
 
     if os.path.exists(source_filename):
         logging.info("%s already exists. Backing it up as %s.old", source_filename, source_filename)
@@ -169,8 +196,10 @@ def make_source_file(url: str,
         utils.unslurp(source_filename, source_contents)
     else:
         utils.unslurp(source_filename, source_contents)
-        if svn:
+        if vcs == VcsType.SVN:
             svn_safe_add(source_filename)
+        elif vcs == VcsType.GIT:
+            utils.unchecked_call(["git", "add", "-N", source_filename])
 
 
 def is_untracked_path(path):
@@ -183,10 +212,9 @@ def is_untracked_path(path):
 
 
 def svn_safe_add(path):
-    """Add path to SVN if it's not already in there. Return True on success."""
+    """Add path to SVN if it's not already in there."""
     if is_untracked_path(path):
-        ret = utils.unchecked_call(["svn", "add", path])
-        return ret == 0
+        utils.unchecked_call(["svn", "add", path])
 
 
 def get_spec_name_in_srpm(srpm):
@@ -194,7 +222,10 @@ def get_spec_name_in_srpm(srpm):
     there is exactly one spec file in the SRPM -- if there is more than
     one spec file, returns the name of the first one ``cpio'' prints.
     """
-    out, ret = utils.sbacktick("rpm2cpio %s | cpio -t '*.spec' 2> /dev/null" % shell_quote(srpm), shell=True)
+    out, ret = utils.sbacktick(
+        "rpm2cpio %s | cpio -t '*.spec' 2> /dev/null" % shlex.quote(srpm),
+        shell=True
+    )
     if ret != 0:
         raise Error("Unable to get list of spec files from %s" % srpm)
     try:
@@ -210,9 +241,9 @@ def get_spec_name_in_srpm(srpm):
 
 def extract_from_rpm(rpm, file_or_pattern=None):
     """Extract a specific file or glob from an rpm."""
-    command = "rpm2cpio " + shell_quote(rpm) + " | cpio -ivd"
+    command = "rpm2cpio " + shlex.quote(rpm) + " | cpio -ivd"
     if file_or_pattern:
-        command += " " + shell_quote(file_or_pattern)
+        command += " " + shlex.quote(file_or_pattern)
     return utils.checked_call(command, shell=True)
 
 
@@ -241,7 +272,7 @@ def diff2(old_file, new_file, dest_file=None):
     if not (ret == 0 or ret == 1):
         logging.warning("Error diffing %s %s: diff returned %d",
                         old_file, new_file, ret)
-        return
+        return None
 
     if dest_file:
         utils.unslurp(dest_file, diff)
@@ -274,7 +305,7 @@ def diff3(old_file, orig_file, new_file, dest_file=None):
     if not (ret == 0 or ret == 1):
         logging.warning("Error diffing %s %s %s: diff3 returned %d",
                         old_file, orig_file, new_file, ret)
-        return
+        return None
 
     if dest_file:
         utils.unslurp(dest_file, diff)
@@ -302,8 +333,7 @@ def diff_spec(srpm, osg_dir, want_diff3=False):
         logging.error("To extract the spec file, run with -e instead.")
         sys.exit(1)
 
-    utils.pushd(osg_dir)
-    try:
+    with utils.chdir(osg_dir):
         srpm = os.path.abspath(srpm)
 
         spec_name = get_spec_name_in_srpm(srpm)
@@ -343,11 +373,8 @@ def diff_spec(srpm, osg_dir, want_diff3=False):
         else:
             diff2(spec_name_old, spec_name_new, spec_name)
 
-    finally:
-        utils.popd()
 
-
-def extract_spec(srpm, osg_dir, svn=True):
+def extract_spec(srpm, osg_dir, vcs: VcsType = VcsType.NONE):
     """Extract the spec file from the SRPM, put it into an osg/ dir,
     and add both the osg/ dir and the spec file to SVN, if necessary.
     An existing spec file will be moved out of the way, with a .old
@@ -355,11 +382,10 @@ def extract_spec(srpm, osg_dir, svn=True):
     """
     if not os.path.exists(osg_dir):
         os.mkdir(osg_dir)
-        if svn:
+        if vcs == VcsType.SVN:
             svn_safe_add(osg_dir)
 
-    utils.pushd(osg_dir)
-    try:
+    with utils.chdir(osg_dir):
         srpm = os.path.abspath(srpm)
 
         spec_name = get_spec_name_in_srpm(srpm)
@@ -372,18 +398,17 @@ def extract_spec(srpm, osg_dir, svn=True):
 
         logging.info("Extracting new upstream spec file as %s", spec_name)
         extract_from_rpm(srpm, spec_name)
-        if svn:
+        if vcs == VcsType.SVN:
             svn_safe_add(spec_name)
-    finally:
-        utils.popd()
+        elif vcs == VcsType.GIT:
+            utils.unchecked_call(["git", "add", "-N", spec_name])
 
 
 def extract_orig_spec(osg_dir):
     """Save a copy of the original upstream spec file from before the
     import into the osg_dir
     """
-    utils.pushd(osg_dir)
-    try:
+    with utils.chdir(osg_dir):
         utils.checked_call(['osg-build', 'prebuild', '..'])
         spec_paths = list(glob.glob("../_upstream_srpm_contents/*.spec"))
         for spec_path in spec_paths:
@@ -391,15 +416,25 @@ def extract_orig_spec(osg_dir):
             logging.info("Saving original upstream spec file as %s",
                          spec_name_orig)
             shutil.copy(spec_path, spec_name_orig)
-    finally:
-        utils.popd()
 
 
 def move_to_cache(srpm: str, upstream_root: str):
     """Move the srpm to the upstream cache. Return the path to the file in the cache."""
     name, version = srpm_nv(srpm)
     base_srpm = os.path.basename(srpm)
-    upstream_dir = os.path.join(upstream_root, name, version)
+    if not upstream_root:
+        if os.path.isdir(DEFAULT_UPSTREAM_ROOT):
+            upstream_dir = os.path.join(DEFAULT_UPSTREAM_ROOT, name, version)
+        elif os.path.isdir(OLD_DEFAULT_UPSTREAM_ROOT):
+            upstream_dir = os.path.join(OLD_DEFAULT_UPSTREAM_ROOT, name, version)
+        else:
+            raise Error(
+                "Upstream root directory not found accessible; check that "
+                "you're on a machine that has access to it or specify a "
+                "different directory with the `-u` option."
+            )
+    else:
+        upstream_dir = os.path.join(upstream_root, name, version)
     utils.safe_makedirs(upstream_dir)
     dest_file = os.path.join(upstream_dir, base_srpm)
     if os.path.exists(dest_file):
@@ -409,119 +444,112 @@ def move_to_cache(srpm: str, upstream_root: str):
     return dest_file
 
 
-def get_sha1sum(file_path):
-    """Return the SHA1 checksum of the file located at `file_path` as a string."""
-    out, ret = utils.sbacktick(["sha1sum", file_path])
-    if ret != 0:
-        raise Error("Unable to get sha1sum of %s: exit %d when running sha1sum" % (file_path, ret))
-    match = re.match(r"[a-f0-9]{40}", out)
-    if not match:
-        raise Error("Unable to get sha1sum of %s: unexpected output: %s" % (file_path, out))
-    return match.group(0)
+def get_arguments(argv):
+    parser = argparse.ArgumentParser(
+        description="""\
+This program should be called from a checkout of the packaging repo and given
+the URL of an upstream SRPM. It will create and populate the appropriate
+directories in the packaging repo as well as downloading and putting the SRPM
+into the upstream cache."""
+    )
+    parser.add_argument(
+        "-d",
+        "--diff-spec",
+        "-2",
+        action="store_const",
+        dest="extra_action",
+        const=ExtraAction.DIFF_SPEC,
+        help="Perform a two-way diff between the new upstream spec file and the OSG spec file. "
+             "The new upstream spec file will be written to SPEC.new, and the OSG spec file will be "
+             "written to SPEC.old; the differences will be written to SPEC. You will have to edit "
+             "SPEC to resolve the differences.",
+    )
+    parser.add_argument(
+        "--dirname", default=None,
+        help="The directory name in the packaging repo the imported files will be placed into; "
+             "defaults to the name of the package but you might want to change it "
+             "to add an '.el9' suffix for example."
+    )
+    parser.add_argument(
+        "-e", "--extract-spec", action="store_const", dest='extra_action', const=ExtraAction.EXTRACT_SPEC,
+        help="Extract the spec file from the SRPM and put it into an osg/ subdirectory.")
+    parser.add_argument(
+        "--debug", action="store_const", dest="loglevel", const=logging.DEBUG,
+        help="Print additional debugging messages."
+    )
+    parser.add_argument(
+        "--no-vcs", action="store_false", dest="want_vcs",
+        help="Do not perform version control system operations, only create files and directories."
+    )
+    parser.add_argument(
+        "-o", "--output",
+        help="The filename the upstream-url should be saved as.")
+    parser.add_argument(
+        "-p", "--provider",
+        help="Who provided the SRPM being imported. For example, 'epel'. "
+             "This is used to name the .source file in the 'upstream' directory. "
+             "If unspecified, guess based on the URL, and use 'developer' as the fallback.")
+    parser.add_argument(
+        "-q", "--quiet", action="store_const", dest="loglevel", const=logging.WARNING,
+        help="Print fewer messages."
+    )
+    parser.add_argument(
+        "-3", "--diff3-spec", action="store_const", dest='extra_action', const=ExtraAction.DIFF3_SPEC,
+        help="Perform a three-way diff between the original upstream spec file, the OSG spec file, "
+             "and the new upstream spec file. These spec files will be written to SPEC.orig, "
+             "SPEC.old, and SPEC.new, respectively; a merged result will be written to SPEC."
+             "You will have to edit SPEC to resolve merge conflicts.")
+    parser.add_argument(
+        "-u", "--upstream", default=None,
+        help="The base directory to put the upstream sources under."
+    )
+    parser.add_argument(
+        "-U", "--update", action="store_const", dest='extra_action', const=ExtraAction.UPDATE,
+        help="If there is an osg/ directory, do a 3-way diff like --diff3-spec.  Otherwise just update"
+             " the .source file in the 'upstream' directory."
+    )
+    parser.add_argument("upstream_url", help="The URL of the upstream SRPM.")
+    parser.set_defaults(extra_action=ExtraAction.NOTHING, loglevel=logging.INFO)
+    args = parser.parse_args(argv[1:])
+    return args, parser
 
 
 def main(argv=None):
     if argv is None:
         argv = sys.argv
 
-    parser = OptionParser("""
-    %prog [options] <upstream-url>
-
-%prog should be called from an SVN checkout and given the URL of an upstream SRPM.
-will create and populate the appropriate directories in SVN as well as
-downloading and putting the SRPM into the upstream cache.
-""")
+    args, parser = get_arguments(argv)
     try:
-        parser.set_defaults(extra_action=None)
+        logging.basicConfig(format=" >> %(message)s", level=args.loglevel)
 
-        parser.add_option(
-            "-d", "--diff-spec", "-2", action="store_const", dest='extra_action', const=EXTRA_ACTION_DIFF_SPEC,
-            help="Perform a two-way diff between the new upstream spec file and the OSG spec file. "
-            "The new upstream spec file will be written to SPEC.new, and the OSG spec file will be "
-            "written to SPEC.old; the differences will be written to SPEC. You will have to edit "
-            "SPEC to resolve the differences.")
-        parser.add_option(
-            "--dirname", default=None,
-            help="The SVN directory name the imported files will be placed into; "
-            "defaults to the name of the package but you might want to change it "
-            "to add an '.el9' suffix for example."
-        )
-        parser.add_option(
-            "-e", "--extract-spec", action="store_const", dest='extra_action', const=EXTRA_ACTION_EXTRACT_SPEC,
-            help="Extract the spec file from the SRPM and put it into an osg/ subdirectory.")
-        parser.add_option(
-            "--loglevel",
-            help="The level of logging the script should do. "
-            "Valid values are DEBUG,INFO,WARNING,ERROR,CRITICAL")
-        parser.add_option(
-            "--no-svn", action="store_false", dest="svn",
-            help="Do not perform SVN operations, only create files and directories."
-        )
-        parser.add_option(
-            "-o", "--output",
-            help="The filename the upstream-url should be saved as.")
-        parser.add_option(
-            "-p", "--provider",
-            help="Who provided the SRPM being imported. For example, 'epel'. "
-            "This is used to name the .source file in the 'upstream' directory. "
-            "If unspecified, guess based on the URL, and use 'developer' as the fallback.")
-        parser.add_option(
-            "-3", "--diff3-spec", action="store_const", dest='extra_action', const=EXTRA_ACTION_DIFF3_SPEC,
-            help="Perform a three-way diff between the original upstream spec file, the OSG spec file, "
-            "and the new upstream spec file. These spec files will be written to SPEC.orig, "
-            "SPEC.old, and SPEC.new, respectively; a merged result will be written to SPEC."
-            "You will have to edit SPEC to resolve merge conflicts.")
-        parser.add_option(
-            "-u", "--upstream", default=DEFAULT_UPSTREAM_ROOT,
-            help="The base directory to put the upstream sources under. "
-            "Default: %default")
-        parser.add_option(
-            "-U", "--update", action="store_const", dest='extra_action', const=EXTRA_ACTION_UPDATE,
-            help="If there is an osg/ directory, do a 3-way diff like --diff3-spec.  Otherwise just update"
-            " the .source file in the 'upstream' directory."
-        )
-        parser.add_option(
-            "--nosha1sum", action="store_false", dest="want_sha1sum", default=True,
-            help="Do not add a 'sha1sum' parameter to the .source file. "
-                 ".source files with sha1sums need osg-build 1.14+ to use."
-        )
+        vcs = VcsType.NONE
+        if args.want_vcs:
+            if git.is_git("."):
+                vcs = VcsType.GIT
+            elif svn.is_svn("."):
+                vcs = VcsType.SVN
+            else:
+                raise Error(
+                    "No version control system detected in current directory. "
+                    "Run this program from your checkout of a packaging repo, "
+                    "or pass --no-vcs to skip version control operations."
+                )
 
-        options, pos_args = parser.parse_args(argv[1:])
-
-        if options.loglevel:
-            try:
-                loglevel = int(getattr(logging, options.loglevel.upper()))
-            except (TypeError, AttributeError):
-                raise UsageError("Invalid log level")
-        else:
-            loglevel = DEFAULT_LOG_LEVEL
-        logging.basicConfig(format=" >> %(message)s", level=loglevel)
-
-        try:
-            upstream_url = pos_args[0]  # type:str
-        except IndexError:
-            raise UsageError("Required argument <upstream-url> not provided")
-
-        if options.svn and utils.unchecked_call("svn info &>/dev/null", shell=True) != 0:
-            raise Error("Must be called from an svn checkout to do svn operations! Pass --no-svn to skip those.")
-
-        if not re.match(r'(http|https|ftp):', upstream_url):
+        if not re.match(r'(http|https|ftp):', args.upstream_url):
             raise UsageError("upstream-url is not a valid url")
 
-        outfile = options.output or os.path.basename(upstream_url)
-        sha1sum = fetch_sources.download_uri(upstream_url, outfile)
-        if not options.want_sha1sum:
-            sha1sum = None
+        outfile = args.output or os.path.basename(args.upstream_url)
+        sha1sum = fetch_sources.download_uri(args.upstream_url, outfile)
         verify_rpm(outfile)
-        srpm = move_to_cache(outfile, options.upstream)
-        make_svn_tree(
+        srpm = move_to_cache(outfile, args.upstream)
+        make_repo_subtree(
             srpm,
-            upstream_url,
-            options.dirname,
-            options.extra_action,
-            options.provider,
+            args.upstream_url,
             sha1sum,
-            options.svn,
+            args.dirname,
+            args.extra_action,
+            args.provider,
+            vcs,
         )
 
     except UsageError as e:
