@@ -180,3 +180,16 @@ def krb_kinit(principal: str, timeout: int = 180) -> bool:
     else:
         _log.warning("Unable to validate new kerberos credential for principal %s", principal)
         return False
+
+
+def krb_kswitch_or_kinit(principal: str, timeout: int = 180) -> bool:
+    """
+    Run kswitch to switch to the desired principal, and kinit if kswitch didn't
+    switch us to the desired principal.
+    Return True on success, False on failure.
+    """
+    if krb_check_principal(principal):
+        return True
+    if krb_kswitch(principal):
+        return True
+    return krb_kinit(principal, timeout)

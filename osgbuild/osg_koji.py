@@ -16,6 +16,7 @@ from osgbuild.utils import (
     ask,
     ask_yn,
     find_file,
+    krb_kinit,
     safe_make_backup,
     safe_makedirs,
 )
@@ -304,6 +305,7 @@ def run_setup(options):
 
 
 def verify_koji_config(config_file):
+    # type: (str) -> configparser.ConfigParser
     """Ensure the koji config file exists and the files it references also exist.
     Returns the koji config."""
     try:
@@ -384,6 +386,17 @@ tools by running:
 Koji has been configured to use Kerberos auth.
 You may need to run `kinit` before running the above command.
 """)
+            elif argv[1] == "hello":
+                koji_config = verify_koji_config(koji_config_path)
+                try:
+                    authtype = koji_config.get("koji", "authtype")
+                except configparser.NoOptionError:
+                    authtype = DEFAULT_AUTHTYPE
+                if authtype == "kerberos":
+                    principal = koji_config.get("koji", "principal")
+                    if principal:
+                        credhelper.krb_kswitch_or_kinit(principal):
+                return run_koji(args=["--config=" + koji_config_path, "hello"])
             elif argv[1] == "help":
                 run_koji(args=argv[1:])
                 print(EXTRA_HELP)
