@@ -84,6 +84,9 @@ DEFAULT_DVERS_BY_REPO = {
     '24-main': ['el8', 'el9'],
     '24-upcoming': ['el8', 'el9'],
     '24-internal': ['el8', 'el9'],
+    '25-main': ['el8', 'el9', 'el10'],
+    '25-upcoming': ['el8', 'el9', 'el10'],
+    '25-internal': ['el8', 'el9', 'el10'],
     'devops': ['el7', 'el8', 'el9'],
     'chtc': ['el9'],
 }

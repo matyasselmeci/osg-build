@@ -18,6 +18,8 @@ OSG_23_MAIN = "native/redhat/branches/23-main"
 OSG_23_UPCOMING = "native/redhat/branches/23-upcoming"
 OSG_24_MAIN = "native/redhat/branches/24-main"
 OSG_24_UPCOMING = "native/redhat/branches/24-upcoming"
+OSG_25_MAIN = "native/redhat/branches/25-main"
+OSG_25_UPCOMING = "native/redhat/branches/25-upcoming"
 
 
 def regex_in_list(pattern, listing):
