@@ -369,12 +369,20 @@ def repo_hints(targets):
                 osg_internal_match = re.match(r'osg-(\d+)-internal-el\d+', target)
                 osg_empty_match = re.match(r'osg-([0-9.]+)-el\d+-empty', target)
                 osg_contrib_match = re.match(r'osg-([0-9.]+)-el\d+-contrib', target)
+                osg_empty2_match = re.match(r'osg-([0-9.]+)-empty-el\d+', target)
+                osg_contrib2_match = re.match(r'osg-([0-9.]+)-contrib-el\d+', target)
                 if osg_empty_match:
                     osgver = osg_empty_match.group(1)
                     __repo_hints_cache["%s-empty" % osgver] = {'target': 'osg-%s-%%(dver)s-empty' % osgver, 'tag': 'osg-%(dver)s'}
                 elif osg_contrib_match:
                     osgver = osg_contrib_match.group(1)
                     __repo_hints_cache["%s-contrib" % osgver] = {'target': 'osg-%s-%%(dver)s-contrib' % osgver, 'tag': 'osg-%(dver)s'}
+                elif osg_empty2_match:
+                    osgver = osg_empty2_match.group(1)
+                    __repo_hints_cache["%s-empty" % osgver] = {'target': 'osg-%s-empty-%%(dver)s' % osgver, 'tag': 'osg-%(dver)s'}
+                elif osg_contrib2_match:
+                    osgver = osg_contrib2_match.group(1)
+                    __repo_hints_cache["%s-contrib" % osgver] = {'target': 'osg-%s-contrib-%%(dver)s' % osgver, 'tag': 'osg-%(dver)s'}
                 elif osg_match:
                     osgver = osg_match.group(1)
                     __repo_hints_cache[osgver] = __repo_hints_cache['osg-%s' % osgver] = {'target': 'osg-%s-%%(dver)s' % osgver, 'tag': 'osg-%(dver)s'}
