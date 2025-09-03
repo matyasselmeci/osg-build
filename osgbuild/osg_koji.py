@@ -20,7 +20,7 @@ from osgbuild.utils import (
     safe_makedirs,
     shell_quote)
 from osgbuild.error import Error, KojiError
-from osgbuild import kojiinter
+from osgbuild import credhelper, kojiinter
 
 
 OLD_CLIENT_CERT_FILE = os.path.join(KOJI_USER_CONFIG_DIR, "client.crt")
@@ -143,16 +143,17 @@ def make_config_text(authtype, principal):
         print("Configuring the Koji client for Kerberos auth.")
         auth_block = KERBEROS_AUTH_BLOCK
 
+        default_principal = credhelper.krb_get_default_principal()
         if principal is None:
             # Principal not specified; ask interactively
             print("")
-            print("Please enter the Kerberos principal you want to use, or just press Enter")
-            print("to use the default principal.")
+            print("Please enter the Kerberos principal you want to use.")
+            print("Default: [%s]" % default_principal)
             print("")
             try:
-                principal = input("> ")
+                principal = input("> ").strip() or default_principal
             except EOFError:
-                principal = ""
+                principal = default_principal
 
         if str(principal).lower() not in ["", "none", "default"]:
             assert isinstance(principal, str)

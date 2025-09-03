@@ -15,6 +15,7 @@ import urllib.request, urllib.error
 from typing import Optional, List, NamedTuple, Set, Dict
 
 from .constants import *
+from . import credhelper
 from . import utils
 from .error import KojiError, type_of_error
 from .utils import split_nvr
@@ -150,8 +151,6 @@ class KojiInter(object):
 
         self.background = opts['background']
 
-
-
     def add_pkg(self, package_name):
         """Part of koji task. If the package needs to be added to koji_tag,
         do so.
@@ -198,28 +197,55 @@ class KojiInter(object):
 # end of class KojiInter
 
 
-class KojiShellInter(object):
-    """An interface to doing koji tasks via invoking the koji cli through
-    the shell.
-
-    """
+class KojiBaseInter:
     def __init__(self, dry_run=False):
-        self.koji_cmd = get_koji_cmd()
-        self.user = None
         self.authtype = DEFAULT_AUTHTYPE
-        self.topurl = os.path.join(KOJI_HUB, "kojifiles")
+        self.ca = None
+        self.cert = KOJI_CLIENT_CERT
         self.dry_run = dry_run
+        self.server = os.path.join(KOJI_HUB, "kojihub")
+        self.serverca = None
+        self.topurl = os.path.join(KOJI_HUB, "kojifiles")
+        self.user = None
+        self.weburl = os.path.join(KOJI_WEB, "koji")
 
     def read_config_file(self, config_file=None):
-        # TODO duplication between here and KojiLibInter
         try:
             cfg = get_koji_config(config_file)
             items = dict(cfg.items('koji'))
         except configparser.Error as err:
             raise KojiError("Can't read config file from %s: %s" % (config_file, err))
-        for var in ['topurl', 'authtype']:
+        for var in ['ca', 'cert', 'server', 'serverca', 'weburl', 'topurl', 'authtype', 'principal']:
             if items.get(var):
                 setattr(self, var, os.path.expanduser(items[var]))
+
+    def maybe_get_kerberos(self):
+        """
+        Check if we have a ticket for the desired Kerberos principal (if we know it and we're using Kerberos);
+        if not, use kinit to get a new one.
+        """
+        # TODO If we kswitch, switch back afterwards. Maybe make this method a contextmanager
+        principal = getattr(self, "principal", "")
+        if getattr(self, "authtype", DEFAULT_AUTHTYPE) == "kerberos" and principal:
+            if credhelper.krb_check_principal(principal):
+                if credhelper.krb_get_default_principal() != principal:
+                    log.info("Switching default principal to %s", principal)
+                    if not credhelper.krb_kswitch(principal):
+                        log.warning("Switching principal to %s failed; auth may not work", principal)
+            else:
+                log.info("No valid credential for principal %s; calling kinit to get a new one" % principal)
+                if not credhelper.krb_kinit(principal):
+                    raise KojiError("Kerberos authtype selected but can't get a valid credential")
+
+
+class KojiShellInter(KojiBaseInter):
+    """An interface to doing koji tasks via invoking the koji cli through
+    the shell.
+
+    """
+    def __init__(self, dry_run=False):
+        super().__init__(dry_run)
+        self.koji_cmd = get_koji_cmd()
 
     def init_koji_session(self, login=True):
         if login and not self.dry_run:
@@ -227,6 +253,7 @@ class KojiShellInter(object):
 
     def login_to_koji(self):
         log.info("Logging in to koji using %s auth", self.authtype)
+        self.maybe_get_kerberos()
         try:
             output = utils.checked_backtick(self.koji_cmd + ["call", "--json", "getLoggedInUser"])
             output_js = json.loads(output)
@@ -272,7 +299,6 @@ class KojiShellInter(object):
                 raise KojiError("Unable to determine koji tags from target")
         return (target_build_tag, target_dest_tag)
 
-
     def build(self, url, target, scratch=False, **kwargs):
         """build package at url for target.
 
@@ -292,6 +318,7 @@ class KojiShellInter(object):
             build_subcmd += ["--nowait"]
         if background:
             build_subcmd += ["--background"]
+        # noinspection PyUnreachableCode
         if arch_override:
             build_subcmd += ["--arch-override=" + arch_override]
         log.info("Calling koji to build the package for target %s", target)
@@ -318,7 +345,6 @@ class KojiShellInter(object):
             if err2:
                 raise KojiError("koji regen-repo failed with exit code " + str(err2))
 
-
     def build_srpm(self, srpm, target, scratch=False, **kwargs):
         """Submit an SRPM build"""
         return self.build(srpm, target, scratch, **kwargs)
@@ -331,7 +357,6 @@ class KojiShellInter(object):
         lines = out.split("\n")
         target_names = [re.split(r"\s+", x)[0] for x in lines]
         return target_names
-
 
     def mock_config(self, arch, tag, dist, outpath, name):
         """Request a mock config from koji-hub"""
@@ -348,7 +373,6 @@ class KojiShellInter(object):
         if err:
             raise KojiError("koji mock-config failed with exit code " + str(err))
 
-
     def search_names(self, terms, stype, match):
         search_subcmd = ["search", stype]
         if match == 'regex':
@@ -362,8 +386,6 @@ class KojiShellInter(object):
             raise KojiError("koji search failed with exit code " + str(err))
         return out.split("\n")
 
-
-
     def tag_build(self, tag, build, force=False):
         tag_pkg_subcmd = ["tag-pkg", tag, build]
         if force:
@@ -372,12 +394,10 @@ class KojiShellInter(object):
         if err:
             raise KojiError("koji tag-pkg failed with exit code " + str(err))
 
-
-    def watch_tasks(self, *args):
+    def watch_tasks(self, *_):
         log.debug('Watching tasks not implemented in Shell backend')
 
-
-    def watch_tasks_with_retry(self, *args):
+    def watch_tasks_with_retry(self, *_):
         log.debug('Watching tasks not implemented in Shell backend')
 
 
@@ -434,7 +454,7 @@ except ImportError:
     pass
 
 
-class KojiLibInter(object):
+class KojiLibInter(KojiBaseInter):
     # Aliasing for convenience
     if HAVE_KOJILIB:
         BR_STATES = kojilib.BR_STATES
@@ -445,17 +465,8 @@ class KojiLibInter(object):
     def __init__(self, dry_run=False):
         if not HAVE_KOJILIB:
             raise KojiError("Cannot use KojiLibInter without kojilib!")
-
-        self.ca = None
-        self.cert = KOJI_CLIENT_CERT
+        super().__init__(dry_run)
         self.kojisession: kojilib.ClientSession = None
-        self.server = os.path.join(KOJI_HUB, "kojihub")
-        self.serverca = None
-        self.user = None
-        self.authtype = DEFAULT_AUTHTYPE
-        self.weburl = os.path.join(KOJI_WEB, "koji")
-        self.topurl = os.path.join(KOJI_WEB, "kojifiles")
-        self.dry_run = dry_run
 
         # "Fix" for SOFTWARE-3112:
         # python-requests, via urllib3, requests keep-alives by default, which are apparently disabled on koji-hub.
@@ -463,24 +474,6 @@ class KojiLibInter(object):
         # turn off those messages.
         logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
         logging.getLogger("requests.packages.urllib3.connectionpool").setLevel(logging.WARNING)
-
-    def read_config_file(self, config_file=None):
-        try:
-            cfg = get_koji_config(config_file)
-            items = dict(cfg.items('koji'))
-
-            try:
-                use_old_ssl = cfg.getboolean('koji', 'use_old_ssl')
-                if use_old_ssl:
-                    log.warning("Ignoring use_old_ssl: only supported on Python 2")
-            except configparser.NoOptionError:
-                pass
-        except configparser.Error as err:
-            raise KojiError("Can't read config file from %s: %s" % (config_file, err))
-        for var in ['ca', 'cert', 'server', 'serverca', 'weburl', 'topurl', 'authtype']:
-            if items.get(var):
-                setattr(self, var, os.path.expanduser(items[var]))
-
 
     # TODO: Add a way to call init_koji_session with debug_xmlrpc=True
     def init_koji_session(self, login=True, debug_xmlrpc=False):
@@ -492,7 +485,6 @@ class KojiLibInter(object):
         if login and not self.dry_run:
             self.login_to_koji()
 
-
     def login_to_koji(self):
         log.info("Logging in to koji using %s auth", self.authtype)
         # TODO validate parameters
@@ -502,6 +494,7 @@ class KojiLibInter(object):
             except Exception as err:
                 raise KojiError("Couldn't do ssl_login: " + str(err))
         elif self.authtype == "kerberos":
+            self.maybe_get_kerberos()
             try:
                 self.kojisession.gssapi_login()
             except Exception as err:
@@ -512,7 +505,6 @@ class KojiLibInter(object):
             self.user = self.kojisession.getLoggedInUser()["name"]
         except (KeyError, AttributeError):
             raise KojiError("Couldn't log in to koji for unknown reason")
-
 
     @koji_error_wrap('adding package')
     def add_pkg(self, tag, package, owner=None):
@@ -530,14 +522,14 @@ class KojiLibInter(object):
             package_list = None
         if not package_list:
             if not self.dry_run:
-                return self.kojisession.packageListAdd(tag, real_package, owner)
+                self.kojisession.packageListAdd(tag, real_package, owner)
             else:
                 log.info("kojisession.packageListAdd(%r, %r, %r)", tag, real_package, owner)
 
-
     @koji_error_wrap('building')
-    def build(self, url, target, scratch=False, **kwargs):
+    def build(self, url, target, scratch=False, **kwargs) -> int:
         """build package at url for target.
+        Return the task ID.
 
         Using **kwargs so signature is same as KojiShellInter.build.
         kwargs recognized: priority, background, arch_override
@@ -549,18 +541,19 @@ class KojiLibInter(object):
             raise ValueError("target not specified")
         opts = { 'scratch': scratch }
         arch_override = kwargs.get('arch_override', None)
+        # noinspection PyUnreachableCode
         if arch_override:
             opts['arch_override'] = arch_override
         priority = kwargs.get('priority', None)
         if kwargs.get('background', False):
-            priority = priority or 5 # Copied from koji cli
+            priority = priority or 5  # Copied from koji cli
         if not self.dry_run:
             return self.kojisession.build(url, target, opts, priority)
         else:
             log.info("kojisession.build(%r, %r, %r, %r)", url, target, opts, priority)
+            return 0
 
-
-    def build_srpm(self, srpm, target, scratch=False, **kwargs):
+    def build_srpm(self, srpm, target, scratch=False, **kwargs) -> int:
         return self.build(self.upload(srpm),
                           target,
                           scratch=scratch,
@@ -591,30 +584,25 @@ class KojiLibInter(object):
         output = kojilib.genMockConfig(name, arch, **opts)
         utils.unslurp(outpath, output)
 
-
     @koji_error_wrap('searching')
     def search(self, terms, stype, match):
         return self.kojisession.search(terms, stype, match)
-
 
     def search_names(self, terms, stype, match):
         data = self.search(terms, stype, match)
         return [x['name'] for x in data]
 
-
     @koji_error_wrap('tagging')
     def tag_build(self, tag, build, force=False):
         return self.kojisession.tagBuild(tag, build, force)
 
-
     @koji_error_wrap('uploading')
     def upload(self, source):
-        "Upload a file to koji. Return the relative remote path."
+        """Upload a file to koji. Return the relative remote path."""
         serverdir = self._unique_path()
         if not self.dry_run:
             self.kojisession.uploadWrapper(source, serverdir, callback=None)
         return os.path.join(serverdir, os.path.basename(source))
-
 
     # taken from cli/koji from Koji version 1.11
     # Copyright (c) 2005-2014 Red Hat, Inc.
@@ -627,8 +615,7 @@ class KojiLibInter(object):
         # For some reason repr(time.time()) includes 4 or 5
         # more digits of precision than str(time.time())
         return '%s/%r.%s' % (prefix, time.time(),
-                          ''.join([random.choice(string.ascii_letters) for i in range(8)]))
-
+                          ''.join([random.choice(string.ascii_letters) for _ in range(8)]))
 
     def get_build_and_dest_tags(self, target):
         """Return the build and destination tags for target."""
@@ -640,7 +627,7 @@ class KojiLibInter(object):
     def regen_repo(self, tag):
         """Regenerate a repo"""
         if not self.dry_run:
-            return self.kojisession.newRepo(tag)
+            self.kojisession.newRepo(tag)
         else:
             log.info("self.kojisession.newRepo(%r)", tag)
 
