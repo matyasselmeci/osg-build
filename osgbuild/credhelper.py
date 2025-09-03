@@ -164,7 +164,15 @@ def krb_kinit(principal: str, timeout: int = 180) -> bool:
     """
     try:
         subprocess.check_call(["kinit", principal], timeout=timeout)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        _log.warning(
+            "kinit timed out while trying to get credential for principal %s. "
+            "Check your network connectivity; you may need to use a VPN to contact "
+            "the Kerberos server.",
+            principal,
+        )
+        return False
+    except subprocess.CalledProcessError:
         _log.warning("Unable to get new kerberos credential for principal %s", principal)
         return False
     if krb_check_principal(principal):
