@@ -8,7 +8,7 @@
 %global _release 1
 
 Name:           osg-build
-Version:        2.0.0
+Version:        2.1.0
 Release:        %{?betatag:0.}%{_release}%{?betatag}%{?dist}
 Summary:        Build tools for the OSG
 
@@ -152,6 +152,10 @@ fi
 
 
 %changelog
+* Fri Sep 05 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 2.1.0-1
+- Add support for OSG 25
+- Request a Kerberos ticket if necessary before making koji builds
+
 * Tue Jul 15 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 2.0.0-1
 - Add support for building from https://github.com/osg-htc/software-packaging.git (SOFTWARE-6078)
 - Koji builds can determine --repo based on a 'koji.ini' file from the branch directory (SOFTWARE-6066)
