@@ -393,6 +393,8 @@ def verify_correct_branch(
     if isinstance(koji_targets, str):
         koji_targets = [koji_targets]
     for koji_target in koji_targets:
+        if not koji_target:
+            continue
         for rt in RESTRICTED_TARGETS.values():
             target_match = rt.koji_target_re.fullmatch(koji_target)
             if not target_match:
