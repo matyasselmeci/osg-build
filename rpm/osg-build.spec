@@ -8,7 +8,7 @@
 %global _release 1
 
 Name:           osg-build
-Version:        2.1.0
+Version:        2.1.1
 Release:        %{?betatag:0.}%{_release}%{?betatag}%{?dist}
 Summary:        Build tools for the OSG
 
@@ -152,6 +152,9 @@ fi
 
 
 %changelog
+* Thu Sep 11 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 2.1.1-1
+- Add missing DEFAULT_DVERS_BY_REPO entry for the *-empty and *-contrib repos
+
 * Fri Sep 05 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 2.1.0-1
 - Add support for OSG 25
 - Request a Kerberos ticket if necessary before making koji builds
