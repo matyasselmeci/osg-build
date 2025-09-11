@@ -5,6 +5,7 @@ import functools
 import logging
 import traceback
 from optparse import OptionGroup, OptionParser, OptionValueError
+from argparse import ArgumentParser
 import os
 from pathlib import Path
 import re
@@ -412,6 +413,95 @@ def set_loglevel(level_str):
 
     log.setLevel(loglevel)
     log_consolehandler.setLevel(loglevel)
+
+
+def get_parser() -> ArgumentParser:
+    """
+    Initializes an ArgumentParser object for parsing command-line arguments.
+    Returns: the ArgumentParser object.
+    """
+    common_parser = ArgumentParser(add_help=False)
+    common_parser.add_argument(
+        "-c", "--cache-prefix",
+        help="The prefix for the software cache to take source files from."
+    )
+    for dver in DVERS:
+        rhel = dver[2:]
+        common_parser.add_argument(
+            "--" + dver,
+            action="append_const",
+            const=dver,
+            dest="redhat_release",
+            help=f"Build for RHEL {rhel}-compatible.",
+        )
+    common_parser.add_argument(
+        "-q", "--quiet",
+        action="store_const",
+        const="WARNING",
+        dest="loglevel",
+        help="Display less information.",
+    )
+    common_parser.add_argument(
+        "-v", "--verbose",
+        action="store_const",
+        const="DEBUG",
+        dest="loglevel",
+        help="Display more information.",
+    )
+    common_parser.add_argument(
+        "-t", "--target-arch",
+        help="The target architecture to build for. "
+        "Ignored in non-scratch Koji builds. "
+        "Default: all architectures (koji task) or system architecture (other tasks)."
+    )
+    common_parser.add_argument(
+        "--version",
+        action="version",
+        version="%(prog)s " + __version__,
+    )
+
+    parser = ArgumentParser(parents=[common_parser])
+    subparsers = parser.add_subparsers()
+
+    prebuild_parser = subparsers.add_parser(
+        "prebuild",
+        help="Preprocess the package, create SRPM to be submitted, and stop.",
+        parents=[common_parser],
+    )
+    prebuild_parser.set_defaults(task="prebuild")
+    prebuild_parser.add_argument(
+        "--full-extract",
+        action="store_true",
+        help="Fully extract all source files.",
+    )
+
+    rpmbuild_parser = subparsers.add_parser(
+        "rpmbuild",
+        help="Build using rpmbuild(8) on the local machine.",
+        parents=[common_parser],
+    )
+    rpmbuild_parser.set_defaults(task="rpmbuild")
+    rpmbuild_parser.add_argument(
+        "--distro-tag",
+        help="The distribution tag to append to the end of the release.",
+    )
+
+    mock_parser = subparsers.add_parser(
+        "mock",
+        help="Build using mock(1) on the local machine.",
+        parents=[common_parser],
+    )
+    mock_parser.set_defaults(task="mock")
+    mock_parser.add_argument(
+        "--distro-tag",
+        help="The distribution tag to append to the end of the release.",
+    )
+    # TODO other options for mock
+
+    # TODO lint prepare quilt koji repo-list
+
+
+    return parser
 
 
 def parse_cmdline_args(argv):
