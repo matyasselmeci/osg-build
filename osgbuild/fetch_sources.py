@@ -510,6 +510,7 @@ def copy_with_filter(files_list, destdir):
                      C.WD_UNPACKED,
                      C.WD_UNPACKED_TARBALL] or
                 base.endswith('~') or
+                base.endswith('.bak') or
                 os.path.isdir(fname)):
             log.debug("Skipping file " + fname)
         else:
@@ -581,7 +582,7 @@ def fetch(package_dir,
     if not spec_filenames:
         raise GlobNotFoundError(spec_glob)
     if len(spec_filenames) > 1:
-        raise Error("Multiple spec files found: " + ", ".join(spec_filenames))
+        raise Error("Multiple spec files found:\n\t" + "\n\t".join(spec_filenames))
 
     return spec_filenames[0]
 # end of fetch
