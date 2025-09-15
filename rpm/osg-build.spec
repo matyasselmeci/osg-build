@@ -152,6 +152,9 @@ fi
 
 
 %changelog
+* Unreleased - 2.1.2-1
+
+
 * Thu Sep 11 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 2.1.1-1
 - Add missing DEFAULT_DVERS_BY_REPO entry for the *-empty and *-contrib repos
 
