@@ -10,14 +10,14 @@ repos:
       - id: trailing-whitespace
       - id: check-toml
 
-  - repo: "https://github.com/asottile/pyupgrade"
-    rev: v3.20.0
-    hooks:
-      - id: pyupgrade
-        args:
-          - "--py36-plus"
-          - "--keep-percent-format"
-        # exclude: |
-        #     (?x)^(
-        #         testjob/testjob_payload.py
-        #     )$
+  # - repo: "https://github.com/asottile/pyupgrade"
+  #   rev: v3.20.0
+  #   hooks:
+  #     - id: pyupgrade
+  #       args:
+  #         - "--py36-plus"
+  #         - "--keep-percent-format"
+  #       # exclude: |
+  #       #     (?x)^(
+  #       #         testjob/testjob_payload.py
+  #       #     )$
