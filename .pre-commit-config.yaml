@@ -16,6 +16,7 @@ repos:
       - id: pyupgrade
         args:
           - "--py36-plus"
+          - "--keep-percent-format"
         # exclude: |
         #     (?x)^(
         #         testjob/testjob_payload.py
