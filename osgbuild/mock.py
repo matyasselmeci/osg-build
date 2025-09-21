@@ -59,15 +59,15 @@ class Mock(object):
         except KeyError:
             raise MockError("The mock group does not exist on this system!")
         if mock_gid not in os.getgroups():
-            raise MockError(
-"""You are not able to do a mock build on this machine because you are not in the mock group.
+            raise MockError("""\
+You are not able to do a mock build on this machine because you are not in the mock group.
 /etc/group must be edited and your username must be added to the mock group.
 You might need to log out and log in for the changes to take effect""")
     # end of __init__()
 
 
     def _init_get_cfg_path(self):
-        """Find the appropriate configuration to use for mock based on 
+        """Find the appropriate configuration to use for mock based on
         options and make a Mock object with it.
 
         """

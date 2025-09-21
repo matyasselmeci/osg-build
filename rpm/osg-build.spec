@@ -3,7 +3,7 @@
 #       osg-build RPMs. I'm keeping it around as a reference for the
 #       dependencies and as a way to store the changelog; both these things
 #       should be split out and the spec file removed.
-# 
+#
 #global betatag .pre
 %global _release 1
 
@@ -663,4 +663,3 @@ fi
 * Fri Jul  1 2011 Brian Bockelman <bbockelm@cse.unl.edu> 0.0.1-1
 - Created an initial vdt-build RPM for ease-of-use
 - Contains RPM::Toolbox::Spec for now.
-

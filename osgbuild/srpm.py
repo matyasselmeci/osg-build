@@ -303,5 +303,3 @@ class SRPMBuild(object):
         else:
             print("unrecognized return code from rpmlint: " + str(lint_returncode))
 # end of SRPMBuild
-
-

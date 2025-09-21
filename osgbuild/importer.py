@@ -521,4 +521,3 @@ downloading and putting the SRPM into the upstream cache.
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))
-

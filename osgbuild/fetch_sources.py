@@ -529,7 +529,7 @@ def fetch(package_dir,
     """Process *.source files in upstream/ directory, downloading upstream
     sources mentioned in them from the software cache. Unpack SRPMs if
     there are any. Override upstream files with those in the osg/
-    directory. Return the path to the downloaded spec file. 
+    directory. Return the path to the downloaded spec file.
 
     """
     if destdir is None:

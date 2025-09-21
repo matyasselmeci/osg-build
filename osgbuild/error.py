@@ -107,4 +107,3 @@ def type_of_error(err_object):
         return str(err_object.__class__.__name__)
     else:
         return "Unknown"
-

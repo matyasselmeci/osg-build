@@ -409,7 +409,7 @@ def entrypoint():
         print(str(err), file=sys.stderr)
         print("""\
     Type %(prog)s --help for usage info.
-    
+
     """ % {'prog': os.path.basename(sys.argv[0])}, file=sys.stderr)
         return 2
     except KeyboardInterrupt:

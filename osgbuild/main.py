@@ -952,28 +952,28 @@ def entrypoint():
         if err.long_usage:
             print(f"""\
     Common usage patterns follow:
-    
+
     To extract and patch the sources without building:
         {prog} prepare PACKAGE1 <PACKAGE2..n>
-    
+
     To look for potential errors in package(s):
         {prog} lint PACKAGE1 <PACKAGE2..n>
-    
+
     To build on the local machine:
         {prog} rpmbuild PACKAGE1 <PACKAGE2..n>
             OR
         {prog} mock PACKAGE1 <PACKAGE2..n>
-    
+
     To submit test build(s):
         {prog} koji --scratch PACKAGE1 <PACKAGE2..n>
-    
+
     To submit final build(s):
         {prog} koji PACKAGE1 <PACKAGE2..n>
-    
+
     To submit build(s) for EL8 or EL9 only:
         {prog} koji --el8 PACKAGE1 <PACKAGE2..n>
         {prog} koji --el9 PACKAGE1 <PACKAGE2..n>
-    
+
     Also see the documentation at:
         https://osg-htc.org/technology/software/osg-build-tools/
 """, file=sys.stderr)

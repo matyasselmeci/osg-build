@@ -1,9 +1,9 @@
 #!/bin/sh
 
 # This tells you what's changed between two Koji tags.
-# It's remarkable skimpy on error checking. 
+# It's remarkable skimpy on error checking.
 # Common usage:
-# 
+#
 #    koji-tag-diff el5-osg-testing el5-osg-release
 
 if [ $# -ne 2 ]; then

@@ -114,7 +114,7 @@ def checked_call(*args, **kwargs):
 
 
 def unchecked_call(*args, **kwargs):
-    """A wrapper around subprocess.call() with the same semantics as checked_call: 
+    """A wrapper around subprocess.call() with the same semantics as checked_call:
     Prints the command to run and the result if loglevel is DEBUG.
 
     """
