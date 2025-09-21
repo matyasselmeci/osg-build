@@ -95,7 +95,7 @@ def build_table(tag_package_table, header, divider, formatstr):
         latest_build = get_latest_build(tag, package)
         if not latest_build:
             errors.append(
-                "Error getting latest build for tag %s, package %s" % (tag, package)
+                f"Error getting latest build for tag {tag}, package {package}"
             )
             continue
         build_line = get_build_line(latest_build)
