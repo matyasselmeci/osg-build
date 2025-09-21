@@ -234,7 +234,7 @@ def checked_backtick(*args, **kwargs):
 
 def slurp(filename):
     """Return the contents of a file as a single string."""
-    with open(filename, 'r') as fh:
+    with open(filename) as fh:
         contents = fh.read()
     return contents
 
@@ -256,7 +256,7 @@ def atomic_unslurp(filename, contents, mode=0o644):
             os.write(fd, contents)
         finally:
             os.close(fd)
-    except EnvironmentError:
+    except OSError:
         os.unlink(tempname)
         raise
     os.rename(tempname, filename)
@@ -368,7 +368,7 @@ def safe_make_backup(filename, move=True, simple_suffix=False):
             os.rename(filename, newname)
         else:
             shutil.copy(filename, newname)
-    except EnvironmentError as err:
+    except OSError as err:
         if err.errno == errno.ENOENT:  # no file to back up
             pass
         elif "are the same file" in str(err):  # file already backed up
@@ -564,7 +564,7 @@ def get_local_machine_dver():
         os_release_contents = slurp("/etc/os-release")
         if not os_release_contents:
             return ""  # empty file?
-    except EnvironmentError:  # some error reading the file
+    except OSError:  # some error reading the file
         return ""
 
     os_release = {}
