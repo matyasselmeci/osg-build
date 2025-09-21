@@ -123,6 +123,7 @@ class KojiInter(object):
         self.regen_repos = opts['regen_repos']
         self.scratch = opts['scratch']
         self.arch_override = opts.get('target_arch', None)
+        debug_xmlrpc = opts.get('debug_xmlrpc', False)
         if self.arch_override and not self.scratch:
             log.warning("target-arch ignored on non-scratch builds")
             self.arch_override = None
@@ -134,10 +135,10 @@ class KojiInter(object):
                 raise KojiError("KojiLib backend requested, but can't import it!")
             elif HAVE_KOJILIB and opts.get('koji_backend') != 'shell':
                 log.debug("KojiInter Using KojiLib backend")
-                KojiInter.backend = KojiLibInter(dry_run)
+                KojiInter.backend = KojiLibInter(dry_run, debug_xmlrpc=debug_xmlrpc)
             else:
                 log.debug("KojiInter Using shell backend")
-                KojiInter.backend = KojiShellInter(dry_run)
+                KojiInter.backend = KojiShellInter(dry_run, debug_xmlrpc=debug_xmlrpc)
             KojiInter.backend.read_config_file()
             KojiInter.backend.init_koji_session()
 
@@ -198,7 +199,7 @@ class KojiInter(object):
 
 
 class KojiBaseInter:
-    def __init__(self, dry_run=False):
+    def __init__(self, dry_run=False, debug_xmlrpc=False):
         self.authtype = DEFAULT_AUTHTYPE
         self.ca = None
         self.cert = KOJI_CLIENT_CERT
@@ -208,6 +209,7 @@ class KojiBaseInter:
         self.topurl = os.path.join(KOJI_HUB, "kojifiles")
         self.user = None
         self.weburl = os.path.join(KOJI_WEB, "koji")
+        self.debug_xmlrpc = debug_xmlrpc
 
     def read_config_file(self, config_file=None):
         try:
@@ -243,8 +245,8 @@ class KojiShellInter(KojiBaseInter):
     the shell.
 
     """
-    def __init__(self, dry_run=False):
-        super().__init__(dry_run)
+    def __init__(self, dry_run=False, debug_xmlrpc=False):
+        super().__init__(dry_run, debug_xmlrpc)
         self.koji_cmd = get_koji_cmd()
 
     def init_koji_session(self, login=True):
@@ -462,10 +464,10 @@ class KojiLibInter(KojiBaseInter):
         REPO_STATES = kojilib.REPO_STATES
         TASK_STATES = kojilib.TASK_STATES
 
-    def __init__(self, dry_run=False):
+    def __init__(self, dry_run=False, debug_xmlrpc=False):
         if not HAVE_KOJILIB:
             raise KojiError("Cannot use KojiLibInter without kojilib!")
-        super().__init__(dry_run)
+        super().__init__(dry_run, debug_xmlrpc)
         self.kojisession: kojilib.ClientSession = None
 
         # "Fix" for SOFTWARE-3112:
@@ -475,11 +477,10 @@ class KojiLibInter(KojiBaseInter):
         logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
         logging.getLogger("requests.packages.urllib3.connectionpool").setLevel(logging.WARNING)
 
-    # TODO: Add a way to call init_koji_session with debug_xmlrpc=True
-    def init_koji_session(self, login=True, debug_xmlrpc=False):
+    def init_koji_session(self, login=True):
         log.info("Initializing koji session to %s", self.server)
         opts = {}
-        if debug_xmlrpc:
+        if self.debug_xmlrpc:
             opts["debug_xmlrpc"] = True
         self.kojisession = kojilib.ClientSession(self.server, opts)
         if login and not self.dry_run:
