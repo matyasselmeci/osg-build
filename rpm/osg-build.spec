@@ -8,7 +8,7 @@
 %global _release 1
 
 Name:           osg-build
-Version:        2.1.1
+Version:        2.1.2
 Release:        %{?betatag:0.}%{_release}%{?betatag}%{?dist}
 Summary:        Build tools for the OSG
 
@@ -152,8 +152,9 @@ fi
 
 
 %changelog
-* Unreleased - 2.1.2-1
-
+* Unreleased Mátyás Selmeci <mselmeci@wisc.edu> - 2.1.2-1
+- Add --debug-xmlrpc flag to Koji XMLRPC calls
+- Remove OSG 24 EL10 promotion routes
 
 * Thu Sep 11 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 2.1.1-1
 - Add missing DEFAULT_DVERS_BY_REPO entry for the *-empty and *-contrib repos
