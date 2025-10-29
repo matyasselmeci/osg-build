@@ -4,6 +4,12 @@ import re
 import typing as t
 
 
+try:
+    from re import Pattern
+except ImportError:
+    Pattern = type(re.compile(""))  # Python 3.6 compat
+
+
 class RestrictedTarget:
     """
     RestrictedTarget defines a set of Koji targets that have restrictions on
@@ -26,17 +32,17 @@ class RestrictedTarget:
         (e.g. "origin/master") as well.
     """
     remotes: t.List[str]
-    koji_target_re: re.Pattern
-    subtree_branch_re: t.Optional[re.Pattern] = None
-    git_branch_re: re.Pattern = None
+    koji_target_re: Pattern
+    subtree_branch_re: t.Optional[Pattern] = None
+    git_branch_re: t.Optional[Pattern] = None
 
     def __init__(
-            self,
-            name: str,
-            remotes: t.Union[str, t.List[str]],
-            koji_target_re: t.Union[str, re.Pattern],
-            subtree_branch_re: t.Union[str, re.Pattern] = None,
-            git_branch_re: t.Union[str, re.Pattern] = None,
+        self,
+        name: str,
+        remotes: t.Union[str, t.List[str]],
+        koji_target_re: t.Union[str, Pattern],
+        subtree_branch_re: t.Union[None, str, Pattern] = None,
+        git_branch_re: t.Union[None, str, Pattern] = None,
     ):
         self.name = name
 
@@ -45,7 +51,7 @@ class RestrictedTarget:
         #
         if isinstance(koji_target_re, str):
             self.koji_target_re = re.compile(koji_target_re)
-        elif isinstance(koji_target_re, re.Pattern):
+        elif isinstance(koji_target_re, Pattern):
             self.koji_target_re = koji_target_re
         else:
             raise TypeError("koji_target_re has the wrong type: %s" % type(koji_target_re))
@@ -54,14 +60,14 @@ class RestrictedTarget:
             self.subtree_branch_re = None
         elif isinstance(subtree_branch_re, str):
             self.subtree_branch_re = re.compile(subtree_branch_re)
-        elif isinstance(subtree_branch_re, re.Pattern):
+        elif isinstance(subtree_branch_re, Pattern):
             self.subtree_branch_re = subtree_branch_re
         else:
             raise TypeError("subtree_branch_re has the wrong type: %s" % type(subtree_branch_re))
 
         if isinstance(git_branch_re, str):
             self.git_branch_re = re.compile(git_branch_re)
-        elif isinstance(git_branch_re, re.Pattern):
+        elif isinstance(git_branch_re, Pattern):
             self.git_branch_re = git_branch_re
         else:
             raise TypeError("git_branch_re has the wrong type: %s" % type(git_branch_re))
@@ -73,7 +79,6 @@ class RestrictedTarget:
             self.remotes = [remotes]
         else:
             self.remotes = remotes
-
 
 
 # The original patterns are here for reference.  Note that the new patterns are not anchored.
