@@ -8,7 +8,7 @@
 %global _release 1
 
 Name:           osg-build
-Version:        2.2.0
+Version:        2.2.1
 Release:        %{?betatag:0.}%{_release}%{?betatag}%{?dist}
 Summary:        Build tools for the OSG
 
@@ -152,6 +152,9 @@ fi
 
 
 %changelog
+* Wed Oct 29 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 2.2.1-1
+- Fix EL8 compatibility issue (SOFTWARE-6244)
+
 * Tue Sep 30 2025 Mátyás Selmeci <mselmeci@wisc.edu> - 2.2.0-1
 - Add --debug-xmlrpc flag to Koji XMLRPC calls
 - Remove OSG 24 EL10 promotion routes
