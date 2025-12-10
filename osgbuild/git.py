@@ -442,6 +442,7 @@ def koji(package_dir, koji_obj, buildopts):
         remote = get_fetch_url(package_dir, get_known_remote(package_dir)[0])
         remote_info = REMOTES_BY_URL[remote]
         if remote_info.layout == RemoteLayout.SUBTREE:
+            # noinspection PyArgumentList
             package_path = os.path.join(*(pathlib.Path(package_dir).parts[-2:]))
         else:
             package_path = os.path.basename(package_dir)

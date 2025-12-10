@@ -318,7 +318,7 @@ def init(argv):
     if len(package_dirs) >= BACKGROUND_THRESHOLD:
         buildopts["background"] = True
 
-    return (buildopts, package_dirs, task)
+    return buildopts, package_dirs, task
 # end of init()
 
 
@@ -331,6 +331,7 @@ def valid_koji_targets():
     if not __koji_targets_cache:
         # HACK
         try:
+            assert kojiinter is not None
             koji_obj = kojiinter.KojiShellInter(dry_run=True)
             __koji_targets_cache = koji_obj.get_targets()
         except KojiError as err:
@@ -607,7 +608,7 @@ rpmbuild     Build using rpmbuild(8) on the local machine
 
     options, args = parser.parse_args(argv[1:])
 
-    return (options, args)
+    return options, args
 # end of parse_cmdline_args()
 
 
@@ -820,7 +821,7 @@ def read_local_koji_ini(local_koji_ini_path) -> t.Dict:
 
 def get_enabled_dvers(task: str, repo: str = "") -> t.List[str]:
     """
-    Get which distro versions we building for, if they have not been specified
+    Get which distro versions we are building for, if they have not been specified
     on the command line.
 
     This depends on the task -- for the koji task, build for all dvers supported
@@ -894,6 +895,7 @@ def guess_pkg_dir(start_dir):
     for udir in [WD_RESULTS, WD_PREBUILD, WD_UNPACKED, WD_UNPACKED_TARBALL, WD_QUILT]:
         try:
             idx = guess_dirlist.index(udir)
+            # noinspection PyArgumentList
             return os.path.join(*guess_dirlist[0:idx])
         except ValueError:
             continue
