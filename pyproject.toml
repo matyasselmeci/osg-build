@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=63", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "osg-build"
+description = "Tools for RPM development for the OSG Software Stack"
+dynamic = ["version"]
+authors = [
+    { name = "Matyas Selmeci", email = "mselmeci@wisc.edu" },
+]
+maintainers = [
+    { name = "OSG Software Team", email = "software-discuss@osg-htc.org" },
+]
+license = { text = "ASL 2.0" }
+requires-python = ">=3.6"
+dependencies = [
+    "importlib_resources",
+    "koji>=1.33",
+    'dataclasses; python_version < "3.7"',
+]
+
+[project.urls]
+Homepage = "https://github.com/osg-htc/osg-build"
+Documentation = "https://osg-htc.org/technology/software/osg-build-tools/"
+
+[project.scripts]
+koji-blame = "osgbuild.koji_blame:entrypoint"
+osg-build = "osgbuild.main:entrypoint"
+osg-import-srpm = "osgbuild.importer:main"
+osg-koji = "osgbuild.osg_koji:main"
+osg-promote = "osgbuild.promoter:entrypoint"
+osg-sign = "osgbuild.osg_sign:entrypoint"
+
+[tool.setuptools]
+include-package-data = true
+script-files = [
+    "fetch-dot-source",
+    "koji-tag-diff",
+    "sha1vdt",
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "osgbuild.version.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["osgbuild", "osgbuild.*"]
