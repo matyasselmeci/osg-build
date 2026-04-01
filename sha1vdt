@@ -19,18 +19,17 @@ fail () {
 
 
 filename=${1?Need filename}
-abs_filename=$(readlink -f "$filename") || fail 1 "Couldn't get absolute path of $filename"
-[[ -f ${abs_filename} ]] || fail 2 "${filename} is not a file"
-
-# the absolute path sometimes includes the /afs/cs.wisc.edu prefix; strip that off
-filename_no_afs=${abs_filename#/afs/cs.wisc.edu}
+real_filename=$(realpath "$filename") || fail 1 "Couldn't get absolute path of $filename"
+[[ -f ${real_filename} ]] || fail 2 "${filename} is not a file"
 
 short_filename=
-for prefix in "/osgsw/upstream/" "/p/vdt/public/html/upstream/"
+for prefix in \
+    "$(realpath "/osgsw/upstream/")" \
+    "$(realpath "/p/vdt/public/html/upstream/")"
 do
-    if [[ ${filename_no_afs} = ${prefix}* ]]
+    if [[ ${real_filename} = ${prefix}* ]]
     then
-        short_filename=${filename_no_afs#"${prefix}"}
+        short_filename=${real_filename#"${prefix}/"}
         break
     fi
 done
