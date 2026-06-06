@@ -92,7 +92,7 @@ class SigningKey(object):
             return err == 0
 
     def have_secret_key(self) -> bool:
-        """Return True if we have the public key for this SigningKey.
+        """Return True if we have the private key for this SigningKey.
 
         """
         with open(os.devnull, "w") as devnull:
@@ -100,6 +100,24 @@ class SigningKey(object):
                                   stdout=devnull,
                                   stderr=devnull)
             return err == 0
+
+    def can_use_secret_key(self) -> bool:
+        """Test if we can use the secret key by signing some small text.
+        Return True if we can use the private key for this SigningKey.
+
+        """
+        if not (self.have_public_key and self.have_secret_key):
+            return False
+        with tempfile.TemporaryDirectory() as tmpdir:
+            testin = os.path.join(tmpdir, "test.txt")
+            testsig = os.path.join(tmpdir, "test.sig")
+            with open(testin, "w") as fh:
+                fh.write("hi\n")
+            ret = subprocess.run([
+                "gpg", "--detach-sign", "--armor", "--local-user", self.keyid,
+                "--output", testsig, testin
+            ])
+            return ret.returncode == 0
 
     def __str__(self):
         return "%s (%s)" % (self.name, self.keyid)

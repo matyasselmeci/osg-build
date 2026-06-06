@@ -411,7 +411,10 @@ class Promoter(object):
             if not sk.have_secret_key():
                 log.debug("secret key missing for key %s", sk)
                 continue
-            log.debug("secret key FOUND for key %s", sk)
+            if not sk.can_use_secret_key():
+                log.debug("secret key cannot be used for key %s", sk)
+                continue
+            log.debug("secret key FOUND and USABLE for key %s", sk)
 
             # We have a secret key, let's try to use it.
             try:
