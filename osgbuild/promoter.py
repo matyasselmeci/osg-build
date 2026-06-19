@@ -372,6 +372,7 @@ class Promoter(object):
                     return None
 
             return reject
+        return None
 
     # TODO maybe move this to osg_sign.py
     def _validate_route_keyids_vs_rpm_keyids(
@@ -468,6 +469,7 @@ class Promoter(object):
         if build_nvr:
             build_obj = Build.new_from_nvr(build_nvr)
             return build_obj
+        return None
 
     def get_dver_build_pairs(self, route, dvers, pkg_or_build, ignore_rejects=False):
         # type: (Route, Set[str], str, bool) -> List[Tuple[str, Build]]
@@ -507,7 +509,8 @@ class Promoter(object):
 
         return dver_build_pairs
 
-    def any_distinct_across_dists(self, tag_build_pairs):
+    @staticmethod
+    def any_distinct_across_dists(tag_build_pairs):
         distinct_nvrs = set()
         for _, build in tag_build_pairs:
             distinct_nvrs.add(build.nvr_no_dist)
@@ -750,9 +753,8 @@ def _print_route_dvers(routename, route):
         printf("The route optionally supports these dver(s): %s", comma_join(route.extra_dvers))
 
 
-def main(argv=None):
-    if argv is None:
-        argv = sys.argv
+def main(argv=()):
+    argv = argv or sys.argv
 
     promoter_ini = utils.find_file(constants.PROMOTER_INI, strict=True)
     signing_keys_ini = utils.find_file(constants.SIGNING_KEYS_INI, strict=True)
