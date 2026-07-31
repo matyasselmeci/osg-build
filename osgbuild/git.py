@@ -215,15 +215,34 @@ def get_fetch_url(package_dir, remote):
         "configured correctly?" % (remote, package_dir))
 
 def get_current_branch_remote(package_dir):
-    """Return the configured remote name for the current branch."""
+    """Return the configured remote name for the current branch.
+
+    Falls back to the first known remote when no tracking remote is configured,
+    which can happen with sparse checkouts set up via `git pull origin BRANCH`
+    without explicit tracking (e.g., `git branch --set-upstream-to`).
+    """
     branch = get_git_branch(package_dir)
 
     out, err = run_git_cmd(package_dir, "config", f"branch.{branch}.remote")
-    if err:
-        raise VCSError("Exit code %d getting git branch %s remote for directory '%s'. Output:\n%s" % \
-                       (err, branch, package_dir, out))
+    if not err:
+        return out.strip()
 
-    return out.strip()
+    # No tracking remote is configured.  Attempt to fall back to the first
+    # known (whitelisted) remote found in the repo.  This allows sparse
+    # checkouts that were initialised with `git init; git pull origin BRANCH`
+    # — which does not write branch.<name>.remote — to still work.
+    _log.debug(
+        "No tracking remote configured for branch %s in %s; falling back to known remote",
+        branch, package_dir,
+    )
+    try:
+        return get_known_remote(package_dir)[0]
+    except VCSError:
+        raise VCSError(
+            "Exit code %d getting git branch %s remote for directory '%s'. Output:\n%s" % (
+                err, branch, package_dir, out
+            )
+        )
 
 
 def is_uncommitted(package_dir):
@@ -241,14 +260,16 @@ def is_uncommitted(package_dir):
 
     branch = get_git_branch(package_dir)
     branch_ref = "refs/heads/%s" % branch
+    # Match remote tracking refs for this branch regardless of URL vs. remote storage format.
     origin_ref_pat = re.compile(r"refs/(urls|remotes)/%s/%s" % (re.escape(remote), re.escape(branch)))
 
     out, err = run_git_cmd(package_dir, "show-ref")
     if err:
         raise VCSError("Exit code %d getting git references for directory %s.  Output:\n%s" % (err, package_dir, out))
+    show_ref_lines = out.splitlines()
     branch_hash = ''
     origin_hash = ''
-    for line in out.splitlines():
+    for line in show_ref_lines:
         info = line.split()
         if len(info) != 2:
             continue
@@ -259,7 +280,34 @@ def is_uncommitted(package_dir):
 
     if not branch_hash and not origin_hash:
         raise VCSError("Could not find either local or remote hash for directory %s." % package_dir)
+
     if branch_hash != origin_hash:
+        # With sparse checkouts initialised via `git init; git pull origin BRANCH`, the local branch
+        # name may differ from the remote branch name (e.g., local 'master' pulled from 'origin/main').
+        # Detect this and give the user actionable advice instead of a cryptic hash-mismatch error.
+        if not origin_hash and branch_hash:
+            any_remote_ref_pat = re.compile(r"refs/(urls|remotes)/%s/(\S+)" % re.escape(remote))
+            for line in show_ref_lines:
+                info = line.split()
+                if len(info) != 2:
+                    continue
+                m = any_remote_ref_pat.fullmatch(info[1])
+                if m and info[0] == branch_hash:
+                    remote_branch = m.group(2)
+                    rename_hint = (
+                        "\nYou may also want to rename your local branch to match:\n"
+                        "  git branch -m %s" % remote_branch
+                    ) if branch != remote_branch else ""
+                    raise VCSError(
+                        "Local branch '%s' does not have a remote tracking branch configured, "
+                        "but its commit matches '%s/%s'.\n"
+                        "To fix, run:\n"
+                        "  git branch --set-upstream-to=%s/%s %s%s" % (
+                            branch, remote, remote_branch,
+                            remote, remote_branch, branch,
+                            rename_hint,
+                        )
+                    )
         raise VCSError("Local hash (%s) does not match remote hash "
             "(%s) for directory %s.  Perhaps you need to perform 'git push'?" % \
                        (branch_hash, origin_hash, package_dir))
@@ -303,6 +351,32 @@ def is_outdated(package_dir):
         if info[1] == branch_ref:
             remote_hash = info[0]
             break
+    if not remote_hash:
+        # The remote may not have a branch with the same name as the local branch
+        # (e.g., a sparse checkout where local 'master' was pulled from 'origin/main').
+        # Check if any remote branch tip matches the local hash and, if so, surface a clear
+        # error with actionable advice rather than a cryptic "Unable to determine remote branch" message.
+        for line in out.splitlines():
+            info = line.strip().split()
+            if len(info) != 2:
+                continue
+            if info[0] == branch_hash:
+                # info[1] is e.g. "refs/heads/main"
+                remote_branch = info[1].removeprefix("refs/heads/")
+                rename_hint = (
+                    "\nYou may also want to rename your local branch to match:\n"
+                    "  git branch -m %s" % remote_branch
+                ) if branch != remote_branch else ""
+                raise VCSError(
+                    "Local branch '%s' does not have a remote tracking branch configured, "
+                    "but its commit matches remote branch '%s'.\n"
+                    "To fix, run:\n"
+                    "  git branch --set-upstream-to=%s/%s %s%s" % (
+                        branch, remote_branch,
+                        remote, remote_branch, branch,
+                        rename_hint,
+                    )
+                )
     if not remote_hash:
         raise VCSError("Unable to determine remote branch's hash.")
 
