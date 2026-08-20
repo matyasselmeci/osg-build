@@ -8,7 +8,7 @@
 %global _release 1
 
 Name:           osg-build
-Version:        2.2.1
+Version:        2.3.0
 Release:        %{?betatag:0.}%{_release}%{?betatag}%{?dist}
 Summary:        Build tools for the OSG
 
