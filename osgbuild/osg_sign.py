@@ -23,6 +23,7 @@ from .utils import IniConfiguration, print_line
 log = logging.getLogger(__name__)
 
 
+DEFAULT_DIGEST_ALGO = "sha256"
 SIGN_SLICE = 10
 SIGN_TIMEOUT = 200
 IMPORT_TIMEOUT = 200
@@ -39,7 +40,7 @@ class SigningKey(object):
         self.name = name
         self.keyid = keyid
         self.dvers = dvers
-        self.digest_algo = digest_algo or None
+        self.digest_algo = digest_algo or DEFAULT_DIGEST_ALGO
         self.all_signing_keyids = []
 
     def query_all_signing_keyids(self):
@@ -191,7 +192,7 @@ def do_list_keys(config: SigningKeysConfig):
         can_sign = "  ?"
         if gpg_bin:
             can_sign = "  Y" if sk.have_secret_key() else "  N"
-        print(fmt % (can_sign, sk.name, sk.keyid, ", ".join(sk.dvers), sk.digest_algo or "DEFAULT"))
+        print(fmt % (can_sign, sk.name, sk.keyid, ", ".join(sk.dvers), sk.digest_algo or DEFAULT_DIGEST_ALGO))
 
 
 def sign_rpms(signing_key, rpms):
