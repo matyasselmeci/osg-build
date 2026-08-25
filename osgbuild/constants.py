@@ -41,6 +41,13 @@ DEFAULT_BUILDOPTS_COMMON = {
 }
 
 DVERS = ['el7', 'el8', 'el9', 'el10']
+CHTC_DVERS = ['el9']
+OSG_3_5_DVERS = ['el7', 'el8']
+OSG_3_6_DVERS = ['el7', 'el8', 'el9']
+OSG_23_DVERS = ['el8', 'el9']
+OSG_24_DVERS = ['el8', 'el9']
+OSG_25_DVERS = ['el8', 'el9', 'el10']
+OSG_26_DVERS = ['el8', 'el9', 'el10']
 
 DEFAULT_BUILDOPTS_BY_DVER = {}
 for _dver in DVERS:
@@ -57,29 +64,40 @@ DEFAULT_BUILDOPTS_BY_DVER['el7']['_binary_payload'] = 'w2.xzdio'
 FALLBACK_DVER = 'el9'
 DEFAULT_DVERS = ['el8', 'el9']
 DEFAULT_DVERS_BY_REPO = {
-    '3.5': ['el7', 'el8'],
-    'osg-3.5': ['el7', 'el8'],
-    '3.5-upcoming': ['el7', 'el8'],
-    '3.6': ['el7', 'el8', 'el9'],
-    'osg-3.6': ['el7', 'el8', 'el9'],
-    '3.6-upcoming': ['el7', 'el8', 'el9'],
-    '23-main': ['el8', 'el9'],
-    '23-upcoming': ['el8', 'el9'],
-    '23-internal': ['el8', 'el9'],
-    '23-empty': ['el8', 'el9'],
-    '23-contrib': ['el8', 'el9'],
-    '24-main': ['el8', 'el9'],
-    '24-upcoming': ['el8', 'el9'],
-    '24-internal': ['el8', 'el9'],
-    '24-empty': ['el8', 'el9'],
-    '24-contrib': ['el8', 'el9'],
-    '25-main': ['el8', 'el9', 'el10'],
-    '25-upcoming': ['el8', 'el9', 'el10'],
-    '25-internal': ['el8', 'el9', 'el10'],
-    '25-empty': ['el8', 'el9', 'el10'],
-    '25-contrib': ['el8', 'el9', 'el10'],
-    'devops': ['el7', 'el8', 'el9'],
-    'chtc': ['el9'],
+    '3.5': OSG_3_5_DVERS,
+    'osg-3.5': OSG_3_5_DVERS,
+    '3.5-upcoming': OSG_3_5_DVERS,
+
+    '3.6': OSG_3_6_DVERS,
+    'osg-3.6': OSG_3_6_DVERS,
+    '3.6-upcoming': OSG_3_6_DVERS,
+    'devops': OSG_3_6_DVERS,
+
+    '23-main': OSG_23_DVERS,
+    '23-upcoming': OSG_23_DVERS,
+    '23-internal': OSG_23_DVERS,
+    '23-empty': OSG_23_DVERS,
+    '23-contrib': OSG_23_DVERS,
+
+    '24-main': OSG_24_DVERS,
+    '24-upcoming': OSG_24_DVERS,
+    '24-internal': OSG_24_DVERS,
+    '24-empty': OSG_24_DVERS,
+    '24-contrib': OSG_24_DVERS,
+
+    '25-main': OSG_25_DVERS,
+    '25-upcoming': OSG_25_DVERS,
+    '25-internal': OSG_25_DVERS,
+    '25-empty': OSG_25_DVERS,
+    '25-contrib': OSG_25_DVERS,
+
+    '26-main': OSG_26_DVERS,
+    '26-upcoming': OSG_26_DVERS,
+    '26-internal': OSG_26_DVERS,
+    '26-empty': OSG_26_DVERS,
+    '26-contrib': OSG_26_DVERS,
+
+    'chtc': CHTC_DVERS,
 }
 
 REPO_HINTS_STATIC = {

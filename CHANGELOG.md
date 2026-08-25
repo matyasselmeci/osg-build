@@ -3,6 +3,15 @@ Changelog
 
 This is the changelog of the V2-branch of the OSG Build Tools.
 
+## 2.3.0 - 2026-08-20
+
+_This is the first release with support for OSG 26._
+
+### Added
+
+- Add support for OSG 26
+
+
 ## 2.2.1 - 2025-10-29
 
 ### Fixed
