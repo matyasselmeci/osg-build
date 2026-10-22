@@ -3,6 +3,23 @@ Changelog
 
 This is the changelog of the V2-branch of the OSG Build Tools.
 
+## 2.3.1 - 2026-10-22
+
+### Fixed
+
+- Handle sparse git checkouts set up without configured tracking branches (e.g.
+  via `git init; git pull origin BRANCH`): fall back to the first known remote
+  when no tracking remote is configured, and give actionable advice (`git
+  branch --set-upstream-to`, with a rename hint if the local and remote branch
+  names differ) instead of a cryptic hash-mismatch or "unable to determine
+  remote branch" error.
+- Restore the terminal to a sane state (`stty sane`) after a failed or timed-out `kinit`.
+
+### Changed
+
+- Internal code cleanup to satisfy linters (no functional changes).
+
+
 ## 2.3.0 - 2026-08-20
 
 _This is the first release with support for OSG 26._
